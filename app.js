@@ -30,6 +30,7 @@
     scan: '<path d="M4 8V5a1 1 0 0 1 1-1h3M16 4h3a1 1 0 0 1 1 1v3M20 16v3a1 1 0 0 1-1 1h-3M8 20H5a1 1 0 0 1-1-1v-3M4 12h16"/>',
     grid: '<rect x="3" y="3" width="7" height="7" rx="1.5"/><rect x="14" y="3" width="7" height="7" rx="1.5"/><rect x="3" y="14" width="7" height="7" rx="1.5"/><rect x="14" y="14" width="7" height="7" rx="1.5"/>',
     key: '<circle cx="8" cy="12" r="4"/><path d="M12 12h9m-3 0v3m-3-3v2"/>', flag: '<path d="M5 21V4h12l-2 4 2 4H5"/>',
+    up: '<path d="M12 19V6m-6 6 6-6 6 6"/>', down: '<path d="M12 5v13m-6-6 6 6 6-6"/>', filter: '<path d="M3 5h18l-7 8v6l-4 2v-8z"/>', spark: '<path d="M3 17l5-6 4 3 5-8 4 5"/>',
   };
   const icon = n => `<svg class="i" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">${ICONS[n] || ''}</svg>`;
   const esc = v => String(v).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
@@ -37,7 +38,7 @@
   const hms = d => `${pad(d.getHours(), 2)}:${pad(d.getMinutes(), 2)}:${pad(d.getSeconds(), 2)}`;
 
   const freshPositions = () => [1, 2, 3].map(id => ({ id, done: false, MP: [], Normal: [] }));
-  const state = { screen: 'serial', serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), showRoi: true, resultsTab: null, uploaded: null, timer: null, last: null };
+  const state = { screen: 'serial', serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), showRoi: true, resultsTab: null, uploaded: null, timer: null, last: null, filter: 'all', jumpTo: null };
   const app = document.getElementById('app'), confirmDlg = document.getElementById('confirm'), failDlg = document.getElementById('fail-dialog');
   const photo = new Image(); photo.src = IMG.src; photo.onload = () => drawThumbs();
   const pos = () => state.positions[state.position - 1];
@@ -56,7 +57,7 @@
     if (h % 17 === 0) { const p = (h >>> 5) % 4; if (p === 0) f.energy = { v: (h >>> 9) % 2 ? '1.2' : '0.8', conf: 91 }; else if (p === 1) f.status = { v: 'READY', conf: 94 }; else if (p === 2) f.length = { v: '30', conf: 89 }; else f.mode = { v: mode === 'MP' ? 'Normal' : 'MP', conf: 92 }; }
     return f;
   }
-  function judge(fields, mode) { let failKey = null; const warnKeys = []; for (const f of FIELDS) { const d = fields[f.key]; if (f.exp && d.v !== f.exp[mode] && !failKey) failKey = f.key; if (d.conf < 80) warnKeys.push(f.key); } return { pass: !failKey, failKey, warnKeys }; }
+  function judge(fields, mode) { const failKeys = [], warnKeys = []; for (const f of FIELDS) { const d = fields[f.key]; if (f.exp && d.v !== f.exp[mode]) failKeys.push(f.key); if (d.conf < 80) warnKeys.push(f.key); } return { pass: !failKeys.length, failKey: failKeys[0] || null, failKeys, warnKeys }; }
   const makeSample = (position, mode, i, t) => { const fields = detectFrame(position, mode, i); return { i, t, position, mode, fields, ...judge(fields, mode) }; };
   function addSample() { const list = samples(); if (list.length >= TARGET) return; const s = makeSample(state.position, state.mode, list.length + 1, hms(new Date())); list.push(s); state.last = s; if (list.length >= TARGET) onModeComplete(); render(); }
   function onModeComplete() {
@@ -68,7 +69,12 @@
   const stopTimer = () => { if (state.timer) clearInterval(state.timer); state.timer = null; };
 
   // ── 렌더 ──
-  function render() { ({ serial: renderSerial, position: renderPositions, inspect: renderInspect, results: renderResults })[state.screen](); renderRail(); drawThumbs(); }
+  function render() {
+    const keep = app.querySelector('.tbl-wrap'), top = keep ? keep.scrollTop : 0;
+    ({ serial: renderSerial, position: renderPositions, inspect: renderInspect, results: renderResults })[state.screen]();
+    const wrap = app.querySelector('.tbl-wrap'); if (wrap && top) wrap.scrollTop = top;
+    renderRail(); drawThumbs(); afterList();
+  }
   function renderRail() {
     const idx = { serial: 1, position: 2, inspect: 3, results: 4 }[state.screen];
     const steps = [['S/N 입력', '장비 시리얼 확인'], ['위치 선택', '1 · 2 · 3'], ['검사', `모드별 ${TARGET}회`], ['결과', 'Pass / Fail · 업로드']];
@@ -113,7 +119,9 @@
   function renderInspect() {
     const p = pos(), list = samples(), count = list.length, last = state.last || list[list.length - 1] || null;
     const running = state.status === 'running', paused = state.status === 'paused', done = count >= TARGET;
-    const passN = list.filter(s => s.pass).length, failN = count - passN, rows = list.slice().reverse();
+    const passN = list.filter(s => s.pass).length, failN = count - passN;
+    const shown = filterRows(list, state.filter).slice().reverse();
+    const hiSet = state.filter === 'all' ? null : new Set(shown.map(refOf));
     const r = 47, circ = 2 * Math.PI * r, off = circ * (1 - count / TARGET);
     app.innerHTML = `<section class="inspect-top"><div><span class="kicker">Step 3</span><h1>위치 ${p.id} 검사</h1><p>▷ 를 누르면 Vision AI가 카메라 화면의 숫자를 1초마다 읽어 기록합니다.</p></div>
       <div class="seg" role="tablist" aria-label="검사 모드">${MODES.map(m => `<button type="button" role="tab" class="${m === state.mode ? 'is-active' : ''}" data-mode="${m}" aria-selected="${m === state.mode}" ${running ? 'disabled' : ''}>${modeDone(p, m) ? icon('check') : ''}${m}<small>${p[m].length}/${TARGET}</small></button>`).join('')}</div></section>
@@ -127,16 +135,21 @@
         <div class="card transport" role="group" aria-label="검사 제어">
           <button type="button" class="btn btn-primary btn-play${running ? ' is-live' : paused ? ' is-paused' : ''}" data-action="start" ${running || done ? 'disabled' : ''}>${icon('play')}${running ? 'Vision AI 감지 중' : paused ? '재개' : '시작'}</button>
           <div class="row"><button type="button" class="btn" data-action="pause" ${running ? '' : 'disabled'}>${icon('pause')}일시정지</button><button type="button" class="btn btn-stop" data-action="stop">${icon('stop')}중지</button></div></div>
+        <div class="card map-card"><div class="box-head"><h3>${icon('grid')}회차 맵<small>${count} / ${TARGET}</small></h3></div>
+          ${shotMap(list, { live: true, tight: true, compact: true, hi: hiSet })}
+          <div class="map-foot">${mapLegend()}<span>Fail 칸을 누르면 당시 화면</span></div>
+          <h3 class="brk-title">항목별 Fail</h3>${failBreakdown(list, state.filter)}</div>
         ${stateNote(last, state, done)}</aside></div>
-    <section class="card log" aria-labelledby="log-title"><div class="log-head"><h2 id="log-title">Pass / Fail<span class="sub">${count ? `${count}행 · 최신순 · Fail 행을 누르면 당시 화면` : '기록 없음'}</span></h2><button type="button" class="btn" data-action="excel" ${count ? '' : 'disabled'} style="min-height:40px">${icon('download')}Excel</button></div>
-      <div class="tbl-wrap">${rows.length ? table(rows, true) : `<div class="tbl-empty">${icon('table')}<p>▷ 시작을 누르면 1회마다 한 행씩 기록됩니다.</p></div>`}</div></section>`;
+    <section class="card log" aria-labelledby="log-title"><div class="log-head"><h2 id="log-title">Pass / Fail<span class="sub">${count ? `${shown.length}행 표시${shown.length !== count ? ` · 전체 ${count}행` : ''} · 최신순` : '기록 없음'}</span></h2>
+      <div class="head-right">${count ? filterBar(list, state.filter) : ''}${failNav(shown)}<button type="button" class="btn" data-action="excel" ${count ? '' : 'disabled'} style="min-height:38px">${icon('download')}Excel</button></div></div>
+      <div class="tbl-wrap">${shown.length ? table(shown, { newest: state.filter === 'all', mode: state.mode }) : `<div class="tbl-empty">${icon('table')}<p>${count ? '이 조건에 해당하는 회차가 없습니다.' : '▷ 시작을 누르면 1회마다 한 행씩 기록됩니다.'}</p></div>`}</div></section>`;
     bind('start', () => { state.status = 'running'; if (!count) addSample(); startTimer(); render(); });
     bind('pause', () => { stopTimer(); state.status = 'paused'; render(); });
     bind('stop', requestStop);
     bind('excel', () => exportCsv(list, `${state.serial}_pos${p.id}_${state.mode}`));
-    app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { stopTimer(); state.mode = b.dataset.mode; state.status = 'idle'; state.last = null; render(); }));
+    app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { stopTimer(); state.mode = b.dataset.mode; state.status = 'idle'; state.last = null; state.filter = 'all'; state.jumpTo = null; render(); }));
     document.getElementById('roi-toggle').addEventListener('change', e => { state.showRoi = e.target.checked; render(); });
-    app.querySelectorAll('tr.is-clickable').forEach(tr => tr.addEventListener('click', () => openFail(findSample(tr.dataset.ref))));
+    wireList(shown);
   }
   function requestStop() {
     stopTimer(); if (state.status === 'running') { state.status = 'paused'; render(); }
@@ -144,7 +157,7 @@
     openConfirm({ title: `위치 ${p.id} 검사를 중지할까요?`, desc: `중지하면 위치 ${p.id}은(는) 완료로 표시되고 위치 선택으로 돌아갑니다. 지금까지 수집한 ${MODES.map(m => `${m} ${p[m].length}회`).join(', ')}는 결과에 남습니다.`, cancel: '계속 검사', ok: '중지하고 완료 표시', danger: true, action: () => { p.done = true; goPositions(); } });
   }
   function goPositions() { stopTimer(); state.status = 'idle'; state.selected = null; state.screen = 'position'; render(); }
-  function goResults() { stopTimer(); state.status = 'idle'; state.screen = 'results'; if (!state.resultsTab) state.resultsTab = groups()[0].id; render(); }
+  function goResults() { stopTimer(); state.status = 'idle'; state.screen = 'results'; state.filter = 'all'; state.jumpTo = null; if (!state.resultsTab) state.resultsTab = 'ALL'; render(); }
 
   function viewport(sample, o) {
     const pct = (v, b, s) => ((v - b) / s * 100).toFixed(2) + '%';
@@ -165,26 +178,133 @@
     if (!photo.complete || !photo.naturalWidth) return; const k = photo.naturalWidth / IMG.w;
     document.querySelectorAll('canvas[data-thumb]').forEach(c => { const f = FIELDS.find(x => x.key === c.dataset.thumb); if (!f) return; const [x0, y0, x1, y1] = f.roi, ctx = c.getContext('2d'), m = 5; ctx.fillStyle = '#1a1f25'; ctx.fillRect(0, 0, c.width, c.height); const sw = (x1 - x0) * k, sh = (y1 - y0) * k, sc = Math.min((c.width - m * 2) / sw, (c.height - m * 2) / sh); ctx.imageSmoothingQuality = 'high'; ctx.drawImage(photo, x0 * k, y0 * k, sw, sh, (c.width - sw * sc) / 2, (c.height - sh * sc) / 2, sw * sc, sh * sc); });
   }
-  function table(rows, newest) {
-    return `<table class="tbl"><thead><tr><th>#</th><th>시각</th>${TABLE_FIELDS.map(f => `<th>${f.label}<small>${f.unit || '&nbsp;'}</small></th>`).join('')}<th class="judge">P/F</th></tr></thead><tbody>${rows.map((s, i) => `<tr class="${s.pass ? '' : 'is-fail is-clickable'}${newest && i === 0 ? ' is-new' : ''}" data-ref="${s.position}-${s.mode}-${s.i}" ${s.pass ? '' : 'tabindex="0"'}><td class="idx">${pad(s.i)}</td><td>${s.t}</td>${TABLE_FIELDS.map(f => `<td class="${s.failKey === f.key ? 'bad' : ''}">${esc(s.fields[f.key].v)}</td>`).join('')}<td class="judge"><span class="pill ${s.pass ? 'pill-pass' : 'pill-fail'}">${s.pass ? 'Pass' : 'Fail'}</span></td></tr>`).join('')}</tbody></table>`;
+
+  // ── 100회 이상을 한눈에: 회차 맵 · 항목별 Fail · 필터 ──
+  const PER_ROW = 25;                       // 회차 맵 한 줄에 그리는 칸 수 (100회 = 4줄)
+  const isWarn = s => s.warnKeys.length > 0;
+  const refOf = s => `${s.position}-${s.mode}-${s.i}`;
+  const failCount = rows => rows.reduce((n, s) => n + (s.pass ? 0 : 1), 0);
+  function filterRows(rows, f) {
+    if (f === 'fail') return rows.filter(s => !s.pass);
+    if (f === 'warn') return rows.filter(s => s.pass && isWarn(s));
+    if (f && f.startsWith('k:')) { const k = f.slice(2); return rows.filter(s => s.failKeys.includes(k)); }
+    return rows;
   }
+  function cellTitle(s) {
+    const head = `${pad(s.i)}회 · ${s.t}`;
+    if (s.pass) return `${head} · Pass${isWarn(s) ? ' · 신뢰도 낮음' : ''}`;
+    const f = FIELDS.find(x => x.key === s.failKey);
+    return `${head} · Fail · ${f.label} ${s.fields[s.failKey].v} ≠ 기준 ${f.exp[s.mode]}${s.failKeys.length > 1 ? ` 외 ${s.failKeys.length - 1}개 항목` : ''}`;
+  }
+  // 한 그룹(위치·모드)의 전 회차를 칸 하나씩. 아직 안 찍은 회차도 빈 칸으로 그려 진행도가 같이 보인다.
+  function shotMap(rows, o = {}) {
+    const total = o.total || TARGET, by = new Map(rows.map(s => [s.i, s])), newest = rows.length ? rows[rows.length - 1].i : 0;
+    let out = '';
+    for (let start = 1; start <= total; start += PER_ROW) {
+      let cells = '';
+      for (let i = start; i < start + PER_ROW && i <= total; i++) {
+        const s = by.get(i);
+        if (!s) { cells += '<i class="cell"></i>'; continue; }
+        const cls = (s.pass ? (isWarn(s) ? 'ok warn' : 'ok') : 'bad tap') + (o.live && i === newest ? ' now' : '') + (o.hi && !o.hi.has(refOf(s)) ? ' dim' : '');
+        cells += `<i class="cell ${cls}" data-ref="${refOf(s)}" title="${esc(cellTitle(s))}"${s.pass ? '' : ' role="button" tabindex="0" aria-label="' + esc(cellTitle(s)) + '"'}></i>`;
+      }
+      out += `<div class="map-row">${o.compact ? '' : `<span class="map-lbl">${pad(start)}</span>`}<div class="map-cells">${cells}</div></div>`;
+    }
+    return `<div class="shotmap${o.compact ? ' compact' : ''}${o.tight ? ' tight' : ''}">${out}</div>`;
+  }
+  const mapLegend = () => '<span class="legend"><i class="cell ok"></i>Pass<i class="cell warn ok"></i>신뢰도 낮음<i class="cell bad"></i>Fail<i class="cell"></i>남은 회차</span>';
+  // 어느 항목 때문에 Fail 났는지. 100회가 넘어가면 "몇 번째 행"보다 이쪽이 먼저 필요하다.
+  function failBreakdown(rows, active) {
+    const n = {}; rows.forEach(s => s.failKeys.forEach(k => { n[k] = (n[k] || 0) + 1; }));
+    const list = Object.entries(n).sort((a, b) => b[1] - a[1]);
+    if (!list.length) return `<p class="brk-empty">${icon('check')}기준값과 다른 회차가 없습니다.</p>`;
+    const max = list[0][1];
+    return `<div class="brk">${list.map(([k, c]) => { const f = FIELDS.find(x => x.key === k), on = active === 'k:' + k;
+      return `<button type="button" class="brk-row${on ? ' is-on' : ''}" data-filter="k:${k}" title="${esc(f.label)} 불일치 ${c}회만 보기"><span class="brk-k">${f.label}</span><span class="brk-bar"><i style="width:${(c / max * 100).toFixed(1)}%"></i></span><span class="brk-n">${c}<small>회</small></span></button>`; }).join('')}</div>`;
+  }
+  function filterBar(rows, active) {
+    const fail = failCount(rows), warn = rows.filter(s => s.pass && isWarn(s)).length;
+    const chip = (v, label, n, cls) => `<button type="button" class="chip${active === v ? ' is-on' : ''}${cls ? ' ' + cls : ''}" data-filter="${v}"${!n && v !== 'all' ? ' disabled' : ''}>${label}<b>${n}</b></button>`;
+    const field = active && active.startsWith('k:') ? FIELDS.find(f => f.key === active.slice(2)) : null;
+    return `<div class="chips">${chip('all', '전체', rows.length)}${chip('fail', 'Fail', fail, 'c-fail')}${chip('warn', '신뢰도 80%↓', warn, 'c-warn')}${field ? `<button type="button" class="chip is-on c-fail" data-filter="all">${esc(field.label)} 불일치<b>${filterRows(rows, active).length}</b><span class="x">✕</span></button>` : ''}</div>`;
+  }
+  const failNav = rows => failCount(rows) ? `<div class="jump"><span>Fail 이동</span><button type="button" class="ibtn" data-jump="prev" aria-label="이전 Fail로">${icon('up')}</button><button type="button" class="ibtn" data-jump="next" aria-label="다음 Fail로">${icon('down')}</button></div>` : '';
+
+  // 100행이 넘으면 "다른 값"만 눈에 들어와야 한다: 기준과 같은 값은 흐리게, 다른 값만 진하게.
+  function table(rows, o = {}) {
+    // 기준값은 헤더 아래 고정 행으로. 값과 같은 칸에 놓여 열 너비를 넓히지 않고, 스크롤해도 따라온다.
+    const head = `<tr><th class="c-idx">${o.showGroup ? '위치·모드 · 회차' : '#'}</th><th>시각</th>${TABLE_FIELDS.map(f => `<th>${f.label}${f.unit ? `<small>${esc(f.unit)}</small>` : ''}</th>`).join('')}<th class="judge">P/F</th></tr>`
+      + (o.mode ? `<tr class="base"><th class="c-idx">기준</th><th></th>${TABLE_FIELDS.map(f => `<th>${f.exp ? esc(f.exp[o.mode]) : '기록만'}</th>`).join('')}<th class="judge"></th></tr>` : '');
+    const body = rows.map((s, i) => {
+      const cls = [s.pass ? '' : 'is-fail is-clickable', o.newest && i === 0 ? 'is-new' : ''].filter(Boolean).join(' ');
+      const cells = TABLE_FIELDS.map(f => { const d = s.fields[f.key];
+        const c = s.failKeys.includes(f.key) ? 'bad' : d.conf < 80 ? 'low' : f.exp ? 'same' : '';
+        return `<td class="${c}"${d.conf < 80 ? ` title="신뢰도 ${d.conf}%"` : ''}>${esc(d.v)}</td>`; }).join('');
+      return `<tr class="${cls}" data-ref="${refOf(s)}"${s.pass ? '' : ' tabindex="0"'}><td class="idx">${o.showGroup ? `<b>${s.position}·${esc(s.mode)}</b>` : ''}${pad(s.i)}</td><td class="t">${s.t}</td>${cells}<td class="judge"><span class="pill ${s.pass ? 'pill-pass' : 'pill-fail'}">${s.pass ? 'Pass' : 'Fail'}</span></td></tr>`;
+    }).join('');
+    return `<table class="tbl"><thead>${head}</thead><tbody>${body}</tbody></table>`;
+  }
+  // 표·맵 공통 배선: 필터 칩, 항목별 Fail 막대, Fail 칸/행 클릭, Fail 이동 버튼
+  function wireList(rows) {
+    app.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => { state.filter = b.dataset.filter; state.jumpTo = null; render(); }));
+    app.querySelectorAll('[data-ref]').forEach(el => {
+      const go = () => { const s = findSample(el.dataset.ref); if (s && !s.pass) openFail(s); };
+      el.addEventListener('click', go);
+      el.addEventListener('keydown', e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); go(); } });
+    });
+    const fails = rows.filter(s => !s.pass);
+    app.querySelectorAll('[data-jump]').forEach(b => b.addEventListener('click', () => {
+      if (!fails.length) return;
+      const cur = fails.findIndex(s => refOf(s) === state.jumpTo);
+      const next = b.dataset.jump === 'next' ? (cur + 1) % fails.length : (cur <= 0 ? fails.length - 1 : cur - 1);
+      state.jumpTo = refOf(fails[next]); render();
+    }));
+  }
+  // 필터를 바꿔도 보고 있던 위치를 잃지 않도록 스크롤을 유지하고, Fail 이동은 해당 행으로 스크롤한다.
+  function afterList() {
+    if (!state.jumpTo) return;
+    const row = app.querySelector(`tr[data-ref="${state.jumpTo}"]`);
+    if (!row) return;
+    app.querySelectorAll('.is-target').forEach(e => e.classList.remove('is-target'));
+    row.classList.add('is-target');
+    row.scrollIntoView({ block: 'center' });
+  }
+
   const findSample = ref => { const [p, m, i] = ref.split('-'); return state.positions[p - 1][m][i - 1]; };
 
   // 4. 결과
   const groups = () => state.positions.flatMap(p => MODES.map(m => ({ id: `${p.id}-${m}`, label: `${p.id} - ${m}`, rows: p[m] })));
   function renderResults() {
-    const all = groups(), cur = all.find(g => g.id === state.resultsTab) || all[0]; state.resultsTab = cur.id;
-    const flat = all.flatMap(g => g.rows), fails = flat.filter(s => !s.pass).length;
-    app.innerHTML = `<section class="page-title"><div><span class="kicker">Step 4</span><h1>검사 결과</h1><p>위치·모드별로 각 회차의 읽은 값과 Pass/Fail을 확인합니다. Fail 행을 누르면 당시 화면이 열립니다.</p></div><button type="button" class="btn" data-action="positions">${icon('back')}위치 선택</button></section>
+    const all = groups(), flat = all.flatMap(g => g.rows), fails = failCount(flat);
+    const isAll = state.resultsTab === 'ALL';
+    const cur = isAll ? { id: 'ALL', label: '전체', rows: flat } : (all.find(g => g.id === state.resultsTab) || all[0]);
+    state.resultsTab = cur.id;
+    const shown = filterRows(cur.rows, state.filter);
+    const hiSet = state.filter === 'all' ? null : new Set(shown.map(refOf));
+    // 왼쪽 목록에도 미니 맵을 넣어, 탭을 열어보지 않고도 어느 위치·모드가 나쁜지 보이게 한다.
+    const groupBtn = (id, label, rows, mini) => { const f = failCount(rows), cap = mini ? TARGET : TARGET * 6;
+      const art = `<span class="ratio" title="Pass ${rows.length - f} · Fail ${f}"><i class="p" style="width:${(rows.length - f) / cap * 100}%"></i><i class="f" style="width:${f / cap * 100}%"></i></span>`;
+      return `<button type="button" class="group${id === cur.id ? ' is-active' : ''}" data-tab="${id}"><span class="g-top"><b>${label}</b>${f ? `<span class="pill pill-fail">${f}</span>` : rows.length ? '<span class="pill pill-pass">0</span>' : ''}</span><small>${rows.length} / ${cap}회</small>${art}</button>`; };
+    app.innerHTML = `<section class="page-title"><div><span class="kicker">Step 4</span><h1>검사 결과</h1><p>위치 3곳 × 모드 2개 × ${TARGET}회 = 최대 ${TARGET * 6}회입니다. 회차 맵에서 Fail 칸을, 표에서 Fail 행을 누르면 당시 화면이 열립니다.</p></div><button type="button" class="btn" data-action="positions">${icon('back')}위치 선택</button></section>
       <div class="stats"><div class="card stat"><span>전체 수집</span><b>${flat.length}<small> / ${TARGET * 6}</small></b></div><div class="card stat p"><span>Pass</span><b>${flat.length - fails}</b></div><div class="card stat f"><span>Fail</span><b>${fails}</b></div><div class="card stat"><span>Pass율</span><b>${flat.length ? (100 - fails / flat.length * 100).toFixed(1) : '—'}<small>%</small></b></div></div>
-      <div class="results"><nav class="card group-list" aria-label="위치·모드">${all.map(g => { const f = g.rows.filter(s => !s.pass).length; return `<button type="button" class="group${g.id === cur.id ? ' is-active' : ''}" data-tab="${g.id}"><span><b>${g.label}</b><small>${g.rows.length} / ${TARGET}</small></span>${f ? `<span class="pill pill-fail">${f} Fail</span>` : g.rows.length ? '<span class="pill pill-pass">Pass</span>' : ''}</button>`; }).join('')}</nav>
-        <section class="card"><div class="log-head"><h2>${cur.label}<span class="sub">${cur.rows.length}행</span></h2></div><div class="tbl-wrap tall">${cur.rows.length ? table(cur.rows) : `<div class="tbl-empty">${icon('table')}<p>이 위치·모드는 수집 기록이 없습니다.</p></div>`}</div></section></div>
+      <div class="results">
+        <nav class="card group-list" aria-label="위치·모드">${groupBtn('ALL', '전체', flat, false)}<hr>${all.map(g => groupBtn(g.id, g.label, g.rows, true)).join('')}</nav>
+        <section class="card">
+          <div class="log-head"><h2>${esc(cur.label)}<span class="sub">${shown.length}행 표시${shown.length !== cur.rows.length ? ` · 전체 ${cur.rows.length}행` : ''}</span></h2><div class="head-right">${filterBar(cur.rows, state.filter)}${failNav(shown)}</div></div>
+          <div class="panel-split">
+            <div class="map-box"><div class="box-head"><h3>${icon('grid')}회차 맵</h3>${mapLegend()}</div>
+              ${isAll ? `<div class="map-all">${all.map(g => `<div class="map-line"><span class="map-name">${g.label}</span>${shotMap(g.rows, { compact: true, hi: hiSet })}<b class="map-n${failCount(g.rows) ? ' f' : ''}">${failCount(g.rows)}</b></div>`).join('')}</div>` : shotMap(cur.rows, { hi: hiSet })}
+            </div>
+            <div class="brk-box"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="legend">누르면 그 항목만</span></div>${failBreakdown(cur.rows, state.filter)}</div>
+          </div>
+          <div class="tbl-wrap tall">${shown.length ? table(shown, { showGroup: isAll, mode: isAll ? null : cur.id.split('-')[1] }) : `<div class="tbl-empty">${icon('table')}<p>${cur.rows.length ? '이 조건에 해당하는 회차가 없습니다.' : '이 위치·모드는 수집 기록이 없습니다.'}</p></div>`}</div>
+        </section></div>
       <div class="action-bar"><span class="upload-state${state.uploaded ? ' ok' : ''}">${state.uploaded ? `${icon('check')}업로드 완료 · ${state.uploaded}` : `${icon('info')}아직 업로드하지 않았습니다`}</span><div class="actions"><button type="button" class="btn btn-xl" data-action="excel" ${flat.length ? '' : 'disabled'}>${icon('download')}Excel 내보내기</button><button type="button" class="btn btn-xl btn-primary" data-action="upload" ${flat.length ? '' : 'disabled'}>${icon('upload')}업로드</button></div></div>`;
-    app.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { state.resultsTab = b.dataset.tab; render(); }));
+    app.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { state.resultsTab = b.dataset.tab; state.filter = 'all'; state.jumpTo = null; render(); }));
     bind('positions', goPositions);
     bind('excel', () => exportCsv(flat, `${state.serial}_results`));
     bind('upload', e => { e.currentTarget.disabled = true; e.currentTarget.textContent = '업로드 중…'; setTimeout(() => { state.uploaded = hms(new Date()); toast('결과를 서버에 업로드했습니다'); render(); }, 1200); });
-    app.querySelectorAll('tr.is-clickable').forEach(tr => tr.addEventListener('click', () => openFail(findSample(tr.dataset.ref))));
+    wireList(shown);
   }
 
   // Fail 당시 화면
@@ -229,7 +349,7 @@
       case 'stop': state.screen = 'inspect'; fill(p1, 'MP', TARGET); fill(p1, 'Normal', 61); state.mode = 'Normal'; state.last = p1.Normal[60]; setTimeout(requestStop, 50); break;
       case 'position-progress': complete(p1); fill(p2, 'MP', 40); state.selected = 2; break;
       case 'position-done': complete(p1); complete(p2); complete(p3); break;
-      case 'results': complete(p1); complete(p2); complete(p3); state.screen = 'results'; state.resultsTab = '1-MP'; break;
+      case 'results': complete(p1); complete(p2); complete(p3); state.screen = 'results'; state.resultsTab = 'ALL'; break;
       case 'fail-detail': complete(p1); complete(p2); complete(p3); state.screen = 'results'; state.resultsTab = '1-MP'; setTimeout(() => openFail(p1.MP.find(s => !s.pass)), 50); break;
     }
     render();
