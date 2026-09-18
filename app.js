@@ -155,36 +155,28 @@
     q.disabled = !on; q.placeholder = on ? '회차 · 시각 · 읽은 값 검색' : '검사가 시작되면 검색할 수 있습니다';
     if (q.value !== state.q) q.value = state.q;
 
-    renderSide(); renderDock(); renderTicker();
+    renderTicker();
     const sel = document.getElementById('screen-select');
     const cur = state.screen === 'inspect' ? (state.status === 'running' ? 'running' : state.status === 'paused' ? 'paused' : 'ready') : state.screen === 'position' ? (allDone() ? 'position-done' : state.positions.some(x => x.done) ? 'position-progress' : 'position') : state.screen;
     if ([...sel.options].some(o => o.value === cur)) sel.value = cur;
   }
-  // 오른쪽 열 — 레퍼런스의 관심 종목 자리. 위치·모드 6그룹과 최근 Fail.
-  function renderSide() {
-    const side = document.getElementById('side'), show = state.screen === 'inspect' || state.screen === 'results';
-    side.hidden = !show; if (!show) return;
-    const gs = groups(), recent = allRows().filter(s => !s.pass).slice(-6).reverse();
-    side.innerHTML = `<div class="side-sec"><div class="side-head"><h3>위치 · 모드</h3><span>${gs.filter(g => g.rows.length >= TARGET).length} / 6 완료</span></div>
-      <div class="side-list">${gs.map(g => { const f = failCount(g.rows), pass = g.rows.length - f, cap = TARGET;
-        return `<button type="button" class="wrow${state.screen === 'results' && g.id === state.resultsTab ? ' is-on' : ''}" data-tab="${g.id}">
-          <span class="wrow-l"><b>${g.label}</b><small class="num">${g.rows.length} / ${cap}회</small></span>
-          <span class="wrow-r"><b class="num ${f ? 'c-down' : 'c-up'}">${f ? `${f} Fail` : g.rows.length ? 'Pass' : '—'}</b>
-          <span class="duo"><i class="p" style="width:${pass / cap * 100}%"></i><i class="f" style="width:${f / cap * 100}%"></i></span></span></button>`; }).join('')}</div></div>
-      <div class="side-sec"><div class="side-head"><h3>최근 Fail</h3><span>${failCount(allRows())}건</span></div>
-      ${recent.length ? `<div class="side-list">${recent.map(s => { const f = FIELDS.find(x => x.key === s.failKey);
+  // 최근 Fail — 오른쪽 열에 있던 것을 본문 패널로. 누르면 그 회차의 당시 화면이 열린다.
+  function recentFails(rows, n) {
+    const list = rows.filter(s => !s.pass).slice(-n).reverse();
+    return `<div class="card pad"><div class="box-head"><h3>${icon('alert')}최근 Fail</h3><span class="cap">${failCount(rows)}건</span></div>
+      ${list.length ? `<div class="flist">${list.map(s => { const f = FIELDS.find(x => x.key === s.failKey);
         return `<button type="button" class="frow" data-ref="${refOf(s)}"><span class="frow-l"><b>${s.position}·${esc(s.mode)} <span class="num">${pad(s.i)}</span></b><small>${esc(f.label)} ${esc(s.fields[s.failKey].v)} ≠ ${esc(f.exp[s.mode])}</small></span><small class="num frow-t">${s.t}</small></button>`; }).join('')}</div>`
-        : `<p class="side-empty">아직 Fail이 없습니다.</p>`}</div>`;
-    side.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { if (state.screen !== 'results') goResults(); state.resultsTab = b.dataset.tab; state.filter = 'all'; render(); }));
-    side.querySelectorAll('[data-ref]').forEach(b => b.addEventListener('click', () => openFail(findSample(b.dataset.ref))));
+        : `<p class="empty">아직 Fail이 없습니다.</p>`}</div>`;
   }
-  // 극우 아이콘 레일 — 빠른 필터
-  function renderDock() {
-    const dock = document.getElementById('dock'), show = state.screen === 'inspect' || state.screen === 'results';
-    dock.hidden = !show; if (!show) return;
-    const items = [['all', 'grid', '전체'], ['fail', 'alert', 'Fail'], ['warn', 'info', '신뢰도']];
-    dock.innerHTML = items.map(([v, ic, lb]) => `<button type="button" class="dk${state.filter === v ? ' is-on' : ''}" data-filter="${v}" title="${lb}만 보기">${icon(ic)}<small>${lb}</small></button>`).join('');
-    dock.querySelectorAll('[data-filter]').forEach(b => b.addEventListener('click', () => { state.filter = b.dataset.filter; state.jumpTo = null; render(); }));
+  // 위치·모드 진행 — 오른쪽 열에 있던 관심 종목 목록을 본문 패널로.
+  function groupPanel() {
+    const gs = groups();
+    return `<div class="card pad"><div class="box-head"><h3>${icon('grid')}위치 · 모드</h3><span class="cap">${gs.filter(g => g.rows.length >= TARGET).length} / 6 완료</span></div>
+      <div class="glist">${gs.map(g => { const f = failCount(g.rows), pass = g.rows.length - f;
+        return `<button type="button" class="wrow${state.screen === 'results' && g.id === state.resultsTab ? ' is-on' : ''}" data-tab="${g.id}">
+          <span class="wrow-l"><b>${g.label}</b><small class="num">${g.rows.length} / ${TARGET}회</small></span>
+          <span class="wrow-r"><b class="num ${f ? 'c-down' : 'c-up'}">${f ? `${f} Fail` : g.rows.length ? 'Pass' : '—'}</b>
+          <span class="duo"><i class="p" style="width:${pass / TARGET * 100}%"></i><i class="f" style="width:${f / TARGET * 100}%"></i></span></span></button>`; }).join('')}</div></div>`;
   }
   function renderTicker() {
     const rows = allRows(), n = rows.length, fails = failCount(rows), low = rows.filter(s => s.pass && isWarn(s)).length;
@@ -254,11 +246,13 @@
         <div class="card transport" role="group" aria-label="검사 제어">
           <button type="button" class="btn btn-primary btn-play${running ? ' is-live' : paused ? ' is-paused' : ''}" data-action="start" ${running || done ? 'disabled' : ''}>${icon('play')}${running ? 'Vision AI 감지 중' : paused ? '재개' : '시작'}</button>
           <div class="row"><button type="button" class="btn" data-action="pause" ${running ? '' : 'disabled'}>${icon('pause')}일시정지</button><button type="button" class="btn btn-stop" data-action="stop">${icon('stop')}중지</button></div></div>
-        <div class="card map-card"><div class="box-head"><h3>${icon('grid')}회차 맵<small>${count} / ${TARGET}</small></h3></div>
-          ${shotMap(list, { live: true, tight: true, compact: true, hi: hiSet })}
-          <div class="map-foot">${mapLegend()}<span>Fail 칸을 누르면 당시 화면</span></div>
-          <h3 class="brk-title">항목별 Fail</h3>${failBreakdown(base, state.filter)}</div>
-        ${stateNote(last, state, done)}</aside></div>
+        ${stateNote(last, state, done)}
+        ${recentFails(list, 4)}</aside></div>
+    <section class="board">
+      <div class="card pad map-panel"><div class="box-head"><h3>${icon('grid')}회차 맵<small>${count} / ${TARGET}</small></h3>${mapLegend()}</div>
+        ${shotMap(list, { live: true, hi: hiSet })}</div>
+      <div class="card pad"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>
+    </section>
     <section class="card log" aria-labelledby="log-title"><div class="log-head"><h2 id="log-title">Pass / Fail<span class="sub">${count ? `${shown.length}행 표시${shown.length !== count ? ` · 전체 ${count}행` : ''} · 최신순` : '기록 없음'}</span></h2>
       <div class="head-right">${count ? filterBar(base, state.filter) : ''}${failNav(shown)}<button type="button" class="btn btn-sm" data-action="excel"${count ? '' : ' disabled'}>${icon('download')}Excel</button></div></div>
       <div class="tbl-wrap">${shown.length ? table(shown, { newest: state.filter === 'all', mode: state.mode }) : `<div class="tbl-empty">${icon('table')}<p>${count ? '이 조건에 해당하는 회차가 없습니다.' : '▷ 시작을 누르면 1회마다 한 행씩 기록됩니다.'}</p></div>`}</div></section>`;
@@ -422,17 +416,18 @@
           <button type="button" class="tab${isAll ? '' : ' is-on'}" data-tab="${isAll ? firstGroup : cur.id}">위치·모드별<small class="num">${isAll ? 6 : cur.rows.length}</small></button>
         </div><div class="head-right">${filterBar(base, state.filter)}${failNav(shown)}</div></div>
       <section class="board">
-        <div class="card map-panel">
+        <div class="card pad map-panel">
           <div class="box-head"><h3>${icon('grid')}회차 맵<small>${esc(cur.label)}</small></h3>${mapLegend()}</div>
-          ${isAll ? `<div class="map-all">${all.map(g => `<button type="button" class="map-line" data-tab="${g.id}"><span class="map-name">${g.label}</span>${shotMap(g.rows, { compact: true, per: 50, hi: hiSet })}<b class="map-n${failCount(g.rows) ? ' f' : ''}">${failCount(g.rows)}</b></button>`).join('')}</div>` : shotMap(cur.rows, { hi: hiSet })}
+          ${isAll ? `<div class="map-all">${all.map(g => `<button type="button" class="map-line" data-tab="${g.id}"><span class="map-name">${g.label}</span>${shotMap(g.rows, { compact: true, per: 100, hi: hiSet })}<b class="map-n${failCount(g.rows) ? ' f' : ''}">${failCount(g.rows)}</b></button>`).join('')}</div>` : shotMap(cur.rows, { hi: hiSet })}
         </div>
-        <div class="card brk-panel"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="legend">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>
+        <div class="card pad"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>
       </section>
       <section class="card log">
         <div class="log-head"><h2>${esc(cur.label)}<span class="sub">${shown.length}행 표시${shown.length !== cur.rows.length ? ` · 전체 ${cur.rows.length}행` : ''}</span></h2>
           <span class="upload-state${state.uploaded ? ' ok' : ''}">${state.uploaded ? `${icon('check')}업로드 완료 · ${state.uploaded}` : `${icon('info')}아직 업로드하지 않았습니다`}</span></div>
         <div class="tbl-wrap tall">${shown.length ? table(shown, { showGroup: isAll, mode: isAll ? null : cur.id.split('-')[1] }) : `<div class="tbl-empty">${icon('table')}<p>${cur.rows.length ? '이 조건에 해당하는 회차가 없습니다.' : '이 위치·모드는 수집 기록이 없습니다.'}</p></div>`}</div>
-      </section>`;
+      </section>
+      <section class="board board-2">${groupPanel()}${recentFails(flat, 6)}</section>`;
     app.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { state.resultsTab = b.dataset.tab; state.filter = 'all'; state.jumpTo = null; render(); }));
     bind('positions', goPositions);
     bind('excel', () => exportCsv(flat, `${state.serial}_results`));
