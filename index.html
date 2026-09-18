@@ -5,34 +5,35 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
 <title>Vision AI 검사 콘솔 — 시안 B</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%230d8568'/%3E%3Cpath d='M8 11h4l4 11 4-11h4' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233182F6'/%3E%3Cpath d='M8 11h4l4 11 4-11h4' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
-<div class="frame">
-  <aside class="rail" aria-label="사이드 메뉴">
-    <a class="brand" href="?"><span class="brand-mark">VA</span><span class="brand-name">VISION AI<small>검사 콘솔</small></span></a>
-    <nav class="nav" id="nav"></nav>
-    <div class="rail-foot" id="rail-foot"></div>
-  </aside>
+<div class="app">
+  <header class="gnb">
+    <a class="logo" href="?"><span class="logo-mark" aria-hidden="true"></span>Vision AI</a>
+    <nav class="gnb-menu" id="gnb-menu" aria-label="검사 단계"></nav>
+    <form class="gnb-search" id="search-form" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+      <label class="sr-only" for="q">회차 검색</label>
+      <input id="q" type="search" placeholder="회차 · 시각 · 읽은 값 검색" autocomplete="off" spellcheck="false">
+      <kbd>/</kbd>
+    </form>
+    <div class="gnb-right">
+      <span class="gnb-sn" id="gnb-sn"></span>
+      <button type="button" class="btn btn-primary" id="gnb-cta"></button>
+    </div>
+  </header>
 
-  <div class="main">
-    <header class="topbar">
-      <form class="search" id="search-form" role="search">
-        <label class="sr-only" for="q">회차 검색</label>
-        <input id="q" type="search" placeholder="회차 · 시각 · 읽은 값 검색" autocomplete="off" spellcheck="false">
-        <button type="submit" class="search-go" aria-label="검색">
-          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-        </button>
-      </form>
-      <div class="topbar-right">
-        <div class="tb-sn" id="tb-sn"></div>
-        <div class="user"><span class="avatar" aria-hidden="true">검</span><span class="user-name">검사자<small>Line 3 · 주간</small></span></div>
-      </div>
-    </header>
-    <div class="crumb" id="crumb"></div>
+  <div class="statusbar" id="statusbar"></div>
+
+  <div class="shell">
     <main class="page" id="app"></main>
+    <aside class="side" id="side" aria-label="위치·모드 현황"></aside>
+    <nav class="dock" id="dock" aria-label="빠른 필터"></nav>
   </div>
+
+  <footer class="ticker" id="ticker"></footer>
 </div>
 
 <dialog id="confirm" aria-labelledby="confirm-title">
