@@ -1,0 +1,35 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="color-scheme" content="light">
+<title>Vision AI 검사 콘솔 — UI/UX 시안</title>
+<link rel="stylesheet" href="styles.css">
+</head>
+<body>
+<header class="topbar">
+  <div class="brand"><span class="brand-mark">VA</span><span class="brand-name">Vision AI</span><span class="brand-sub">검사 콘솔</span></div>
+  <nav class="steps" id="steps" aria-label="진행 단계"></nav>
+  <div class="topbar-meta" id="topbar-meta"></div>
+</header>
+<main id="app"></main>
+
+<dialog id="confirm" aria-labelledby="confirm-title">
+  <div class="dlg-body"><h2 id="confirm-title"></h2><p id="confirm-desc"></p></div>
+  <div class="dlg-actions"><button type="button" class="btn" data-dlg="cancel"></button><button type="button" class="btn" data-dlg="ok"></button></div>
+</dialog>
+<dialog id="fail-dialog" class="wide" aria-labelledby="fail-title"><div id="fail-body"></div></dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+<div class="proto-bar" id="proto-bar">
+  <b>UI 시안</b><span>감지값·판정은 시뮬레이션입니다. ▷ 버튼을 누르면 사진 위의 숫자 영역을 읽는 흐름을 확인할 수 있습니다.</span>
+  <div class="right">
+    <label for="screen-select">화면 미리보기</label>
+    <select id="screen-select" aria-label="화면 미리보기"></select>
+    <button type="button" class="btn" id="btn-reset">처음부터</button>
+  </div>
+</div>
+<script src="app.js"></script>
+</body>
+</html>
