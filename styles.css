@@ -220,34 +220,23 @@ svg.i { width: 16px; height: 16px; flex: 0 0 auto; }
 .plan span { font-size: 12px; color: var(--muted); }
 
 /* ───── 2. 위치 선택 ───── */
-.layout-hint { display: flex; align-items: center; gap: var(--s3); font-size: 14px; color: var(--muted); margin-bottom: var(--s5); }
+/* 장비의 실제 배치를 그대로 옮긴 자리(1·2 나란히, 3은 오른쪽 끝). 글로 설명하지 않는다. */
 .pos-grid { display: grid; grid-template-columns: repeat(5, minmax(0, 1fr)); gap: var(--s5); }
-.pos { grid-column: var(--slot); position: relative; min-height: 280px; padding: var(--s5); border-radius: var(--r-xl); border: 0; background: var(--card); box-shadow: var(--shadow); text-align: left; display: flex; flex-direction: column; transition: box-shadow .2s var(--ease), transform .2s var(--ease); }
+.pos { grid-column: var(--slot); position: relative; aspect-ratio: 1 / 1; padding: var(--s5); border-radius: var(--r-xl); border: 0;
+  background: var(--card); box-shadow: var(--shadow); display: grid; place-items: center;
+  transition: box-shadow .2s var(--ease), transform .2s var(--ease); }
 .pos:hover:not(:disabled) { box-shadow: var(--shadow-lift); transform: translateY(-2px); }
 .pos.is-selected { box-shadow: 0 0 0 2px var(--blue), var(--shadow); }
 .pos.is-done { background: var(--green-bg); box-shadow: none; }
-.pos.is-done-fail { background: var(--card); box-shadow: inset 0 0 0 1.5px var(--fail-line), var(--shadow); }
-.pos-top { display: flex; justify-content: space-between; align-items: flex-start; font-size: 13px; color: var(--muted); font-weight: 500; }
-.pos-top small { display: block; font-size: 11px; color: var(--faint); }
-.pos-foot { display: flex; gap: var(--s3); margin-top: var(--s3); padding-top: var(--s3); border-top: 1px solid var(--hair); font-family: var(--num); font-size: 12px; font-weight: 600; }
-.pos-foot i { font-style: normal; }
-.pos-foot i.c-ok { color: var(--faint); font-weight: 400; }
-.pos-foot i.c-none { color: var(--faint); font-weight: 400; }
-.pos-big { font-family: var(--num); font-size: 72px; font-weight: 700; letter-spacing: -3px; line-height: 1; margin: var(--s5) 0 auto; color: var(--ink); }
+.pos-big { font-family: var(--num); font-size: clamp(64px, 9vw, 116px); font-weight: 700; letter-spacing: -5px; line-height: 1; color: var(--ink); }
 .pos.is-done .pos-big { color: var(--green-text); }
 .pos.is-selected .pos-big { color: var(--blue-text); }
-.pos-done-badge { width: 32px; height: 32px; border-radius: 50%; background: var(--green); color: #fff; display: grid; place-items: center; flex: 0 0 auto; }
-.pos-done-badge.is-fail { background: var(--red); }
+.pos-done-badge { position: absolute; top: var(--s5); right: var(--s5); width: 32px; height: 32px; border-radius: 50%;
+  background: var(--green); color: #fff; display: grid; place-items: center; }
 .pos-done-badge svg { width: 16px; height: 16px; }
-.pos-modes { display: grid; gap: var(--s3); margin-top: var(--s5); }
-.pm { display: grid; grid-template-columns: 48px minmax(0, 1fr) auto; gap: var(--s3); align-items: center; font-size: 12px; }
-.pm b { font-weight: 600; color: var(--ink-3); }
-.pm .bar { height: 6px; background: var(--sunken-2); border-radius: var(--r-full); overflow: hidden; }
-.pm .bar > span { display: block; height: 100%; background: var(--blue); border-radius: var(--r-full); }
-.pm.done .bar > span { background: var(--green); }
-.pm .n { font-family: var(--num); color: var(--muted); }
-.pm .n b { color: var(--ink); }
-.pos-slot-empty { grid-column: 3 / 5; border-radius: var(--r-xl); background: rgba(25, 31, 40, .03); display: grid; place-items: center; color: var(--faint); font-size: 13px; }
+.pos-bar { position: absolute; left: var(--s5); right: var(--s5); bottom: var(--s5); height: 6px; border-radius: var(--r-full); background: var(--sunken-2); overflow: hidden; }
+.pos.is-done .pos-bar { display: none; }
+.pos-bar i { display: block; height: 100%; background: var(--blue); border-radius: var(--r-full); transition: width .3s var(--ease); }
 .progress-3 { display: flex; gap: var(--s1); }
 .progress-3 span { width: 40px; height: 6px; border-radius: var(--r-full); background: var(--sunken-2); }
 .progress-3 span.on { background: var(--green); }
@@ -501,14 +490,6 @@ table.tbl tr.is-target td.idx, table.tbl tr.is-target td.judge { background: #fa
 .needchip.w i { background: var(--map-warn); }
 .needchip.f b { color: var(--red-text); } .needchip.w b { color: var(--amber-text); }
 
-/* 좁은 자리에 쓰는 미니 회차 띠 — 회차 맵과 같은 색 */
-.mn-strip { display: grid; grid-template-columns: repeat(var(--cap, 100), minmax(0, 1fr)); gap: 1px; height: 8px; }
-.mn-c { display: block; border-radius: 1px; background: var(--map-empty); }
-.mn-c.ok { background: var(--map-pass); }
-.mn-c.warn { background: var(--map-warn); }
-.mn-c.low { background: #ffd166; }
-.mn-c.bad { background: var(--map-fail); }
-
 /* ───── S/N 화면의 판정 기준 미리보기 ───── */
 .sn-rules { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--hair); display: grid; gap: var(--s2); }
 .sn-rules-h { display: flex; align-items: center; gap: var(--s2); font-size: 13px; font-weight: 600; color: var(--ink-2); }
@@ -663,7 +644,9 @@ body:not(.preview) .action-bar { bottom: 44px; }
   .st-right { margin-left: 0; }
   .page { padding: var(--s4) var(--s4) var(--s8); }
   .metrics { grid-template-columns: minmax(0, 1fr); }
-  .pos-grid { grid-template-columns: 1fr 1fr; } .pos { grid-column: auto; min-height: 220px; } .pos-slot-empty { display: none; }
+  .pos-grid { grid-template-columns: 1fr 1fr; gap: var(--s4); } .pos { grid-column: auto; padding: var(--s4); }
+  .pos-done-badge { top: var(--s4); right: var(--s4); width: 28px; height: 28px; }
+  .pos-bar { left: var(--s4); right: var(--s4); bottom: var(--s4); }
   .head { flex-direction: column; align-items: stretch; }
   .sn-card { padding: var(--s5); } .sn-plan { grid-template-columns: 1fr; }
   .action-bar { flex-wrap: wrap; }
