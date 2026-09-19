@@ -174,7 +174,8 @@
   function onModeComplete() {
     stopTimer(); state.status = 'idle'; const p = pos(), remaining = MODES.find(m => !modeDone(p, m));
     if (remaining) { toast(`${state.mode} ${TARGET}회 완료 · ${remaining} 모드로 전환`); state.mode = remaining; state.last = null; }
-    else { p.done = true; openConfirm({ title: `위치 ${p.id} 검사 완료`, desc: `Normal·MP 각 ${TARGET}회 수집이 끝났습니다. 위치 선택으로 돌아가 다음 위치를 진행하세요.`, cancel: null, ok: '위치 선택으로', action: goPositions }); }
+    else { p.done = true; const t = tally(MODES.flatMap(m => p[m]));
+      openConfirm({ title: `위치 ${p.id} 검사 완료`, desc: `Normal·MP 각 ${TARGET}회 수집이 끝났습니다. ${t.need ? `확인이 필요한 회차가 <b>${t.need}회</b>(Fail ${t.fail} · 주의 ${t.warn} · OCR 미확인 ${t.ocr})입니다.` : '전 회차가 기준 안에 있습니다.'}`, cancel: null, ok: '위치 선택으로', action: goPositions }); }
   }
   const startTimer = () => { stopTimer(); state.timer = setInterval(addSample, 1000); };
   const stopTimer = () => { if (state.timer) clearInterval(state.timer); state.timer = null; };
@@ -321,7 +322,9 @@
   function renderSerial() {
     app.innerHTML = `<div class="sn-wrap"><section class="card sn-card"><h1>시리얼 번호를 입력하세요</h1><p class="intro">장비 라벨의 S/N을 입력하면 위치 선택으로 넘어갑니다.</p>
       <form id="sn-form" novalidate><div class="sn-field"><label for="sn-input">S/N</label><input class="sn-input" id="sn-input" placeholder="SN-2026-001234" maxlength="32" autocomplete="off" spellcheck="false" value="${esc(state.serial)}" aria-describedby="sn-help sn-err"><p class="sn-help" id="sn-help">영문·숫자·하이픈, 6자 이상</p><p class="sn-err" id="sn-err" role="alert" hidden></p></div>
-      <div class="sn-plan"><div class="plan"><b>3</b><span>검사 위치</span></div><div class="plan"><b>2</b><span>모드 (Normal · MP)</span></div><div class="plan"><b>${TARGET}</b><span>모드당 감지 횟수</span></div></div>
+      <div class="sn-plan"><div class="plan"><b>${TARGET * 6}</b><span>총 회차 · 3 × 2 × ${TARGET}</span></div><div class="plan"><b>${FIELDS.length}</b><span>서비스모드 항목</span></div><div class="plan"><b>${RULED.length}</b><span>기준이 있는 항목</span></div></div>
+      <div class="sn-rules"><span class="sn-rules-h">${icon('list')}이렇게 판정합니다<small>기준이 없는 ${FIELDS.length - RULED.length}개는 값만 기록합니다</small></span>
+        <span class="sn-rule-chips">${RULED.map(f => `<span class="rchip"><b>${f.n}</b>${esc(f.label)}<i>${esc(ruleText(f))}</i></span>`).join('')}</span></div>
       <div class="sn-actions"><button type="reset" class="btn btn-xl">Cancel</button><button type="submit" class="btn btn-xl btn-primary">OK ${icon('arrow')}</button></div></form></section></div>`;
     const form = document.getElementById('sn-form'), input = document.getElementById('sn-input'), err = document.getElementById('sn-err'); input.focus();
     form.addEventListener('submit', e => { e.preventDefault(); const v = input.value.trim().toUpperCase(); if (!/^[A-Z0-9-]{6,}$/.test(v)) { err.textContent = '형식이 올바르지 않습니다. 영문·숫자·하이픈 6자 이상으로 입력하세요.'; err.hidden = false; input.setAttribute('aria-invalid', 'true'); input.focus(); return; } state.serial = v; state.screen = 'position'; render(); });
@@ -332,16 +335,25 @@
   function renderPositions() {
     const done = state.positions.filter(p => p.done).length, selP = state.selected ? state.positions[state.selected - 1] : null;
     const cards = state.positions.map(p => { const slot = p.id === 3 ? 5 : p.id, sel = state.selected === p.id;
-      return `<button type="button" class="pos${sel ? ' is-selected' : ''}${p.done ? ' is-done' : ''}" style="--slot:${slot}" data-pos="${p.id}" aria-pressed="${sel}" ${p.done ? 'disabled' : ''}>
-        <span class="pos-top"><span>위치 ${p.id}</span>${p.done ? `<span class="pos-done-badge" aria-label="완료">${icon('check')}</span>` : sel ? '<span class="pill pill-accent">선택됨</span>' : '<span class="pill pill-neutral">대기</span>'}</span>
+      const rows = MODES.flatMap(m => p[m]), t = tally(rows);
+      const from = (p.id - 1) * MODES.length * TARGET;
+      const badge = p.done
+        ? (t.fail ? `<span class="pos-done-badge is-fail" aria-label="완료 · Fail ${t.fail}회">${icon('alert')}</span>` : `<span class="pos-done-badge" aria-label="완료">${icon('check')}</span>`)
+        : sel ? '<span class="pill pill-accent">선택됨</span>' : '<span class="pill pill-neutral">대기</span>';
+      return `<button type="button" class="pos${sel ? ' is-selected' : ''}${p.done ? (t.fail ? ' is-done-fail' : ' is-done') : ''}" style="--slot:${slot}" data-pos="${p.id}" aria-pressed="${sel}" ${p.done ? 'disabled' : ''}>
+        <span class="pos-top"><span>위치 ${p.id}<small class="num">${pad(from + 1)}–${pad(from + MODES.length * TARGET)}번</small></span>${badge}</span>
         <span class="pos-big">${p.id}</span>
-        <span class="pos-modes">${MODES.map(m => `<span class="pm${modeDone(p, m) ? ' done' : ''}"><b>${m}</b><span class="bar"><span style="width:${p[m].length}%"></span></span><span class="n"><b>${p[m].length}</b>/${TARGET}</span></span>`).join('')}</span></button>`; }).join('');
+        <span class="pos-modes">${MODES.map(m => { const mt = tally(p[m]);
+          return `<span class="pm${modeDone(p, m) ? ' done' : ''}"><b>${m}</b>${miniStrip(p[m])}<span class="n"><b>${p[m].length}</b>/${TARGET}</span></span>`; }).join('')}</span>
+        <span class="pos-foot">${t.n ? `${t.fail ? `<i class="c-down">Fail ${t.fail}</i>` : '<i class="c-ok">Fail 0</i>'}${t.warn + t.ocr ? `<i class="c-warn">확인 ${t.warn + t.ocr}</i>` : ''}` : '<i class="c-none">수집 전</i>'}</span></button>`; }).join('');
     const hint = allDone() ? '<b>세 위치 모두 완료</b>결과에서 Pass/Fail을 확인하고 업로드하세요.' : selP ? `<b>위치 ${selP.id}</b>${MODES.find(m => !modeDone(selP, m))} 모드부터 검사합니다.` : '검사할 위치를 고른 뒤 OK를 누르세요. 완료된 위치는 다시 고를 수 없습니다.';
     app.innerHTML = `<div class="head"><div><h1>검사할 위치를 선택하세요</h1><p>장비의 실제 배치와 같은 순서입니다. 1·2·3을 모두 마치면 결과를 볼 수 있습니다.</p></div><div class="head-act"><div class="progress-3" aria-label="위치 완료 ${done}/3">${state.positions.map(p => `<span class="${p.done ? 'on' : ''}"></span>`).join('')}</div><small class="muted num">${done} / 3 완료</small></div></div>
+      ${anySamples() ? `<div class="card pad" style="margin-bottom:var(--s4)">${needSummary(allRows())}</div>` : ''}
       <div class="layout-hint">${icon('grid')}<span>1·2번은 나란히, 3번은 오른쪽 끝에 있습니다.</span>${anySamples() ? '<button type="button" class="btn btn-ghost" data-action="results" style="margin-left:auto;min-height:36px">결과 보기 →</button>' : ''}</div>
       <div class="pos-grid">${cards}<div class="pos-slot-empty" aria-hidden="true">빈 슬롯</div></div>
       <div class="action-bar"><p class="hint">${hint}</p><div class="actions">${allDone() ? `<button type="button" class="btn btn-xl btn-primary" data-action="results">결과 보러 가기 ${icon('arrow')}</button>` : `<button type="button" class="btn btn-xl" data-action="cancel">Cancel</button><button type="button" class="btn btn-xl btn-primary" data-action="ok" ${selP ? '' : 'disabled'}>OK ${icon('arrow')}</button>`}</div></div>`;
     app.querySelectorAll('[data-pos]').forEach(b => b.addEventListener('click', () => { state.selected = state.selected === +b.dataset.pos ? null : +b.dataset.pos; render(); }));
+    app.querySelectorAll('.needchip[data-filter]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); goResults(); state.resultsTab = 'ALL'; state.filter = b.dataset.filter; render(); }));
     bind('cancel', () => { state.selected = null; render(); });
     bind('ok', () => { const p = state.positions[state.selected - 1]; state.position = p.id; state.mode = MODES.find(m => !modeDone(p, m)) || 'MP'; state.status = 'idle'; state.last = null; state.screen = 'inspect'; render(); });
     bind('results', goResults);
@@ -373,7 +385,8 @@
         ${recentFails(list, 4)}</aside></div>
     <section class="board">
       <div class="card pad map-panel"><div class="box-head"><h3>${icon('grid')}회차 맵<small>${count} / ${TARGET}</small></h3>${runLegend()}</div>
-        ${runMap(groups().filter(g => g.pos === p.id && g.mode === state.mode), { live: true, hi: hiSet })}</div>
+        ${runMap(groups().filter(g => g.pos === p.id && g.mode === state.mode), { live: true, hi: hiSet })}
+        <div class="need-wrap">${needSummary(list)}</div></div>
       <div class="card pad"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>
     </section>
     <section class="card log" aria-labelledby="log-title"><div class="log-head"><h2 id="log-title">Pass / Fail<span class="sub">${count ? `${shown.length}행 표시${shown.length !== count ? ` · 전체 ${count}행` : ''} · 최신순` : '기록 없음'}</span></h2>
@@ -390,7 +403,8 @@
   function requestStop() {
     stopTimer(); if (state.status === 'running') { state.status = 'paused'; render(); }
     const p = pos();
-    openConfirm({ title: `위치 ${p.id} 검사를 중지할까요?`, desc: `중지하면 위치 ${p.id}은(는) 완료로 표시되고 위치 선택으로 돌아갑니다. 지금까지 수집한 ${MODES.map(m => `${m} ${p[m].length}회`).join(', ')}는 결과에 남습니다.`, cancel: '계속 검사', ok: '중지하고 완료 표시', danger: true, action: () => { p.done = true; goPositions(); } });
+    const t = tally(MODES.flatMap(m => p[m]));
+    openConfirm({ title: `위치 ${p.id} 검사를 중지할까요?`, desc: `지금까지 ${MODES.map(m => `${m} ${p[m].length}회`).join(', ')}를 수집했고, 그중 ${t.need ? `<b>확인이 필요한 회차가 ${t.need}회</b>(Fail ${t.fail} · 주의 ${t.warn} · OCR 미확인 ${t.ocr})입니다` : '<b>모두 정상</b>입니다'}. 중지하면 위치 ${p.id}은(는) 완료로 표시되고 위치 선택으로 돌아갑니다.`, cancel: '계속 검사', ok: '중지하고 완료 표시', danger: true, action: () => { p.done = true; goPositions(); } });
   }
   function goPositions() { stopTimer(); state.status = 'idle'; state.selected = null; state.screen = 'position'; render(); }
   function goResults() { stopTimer(); state.status = 'idle'; state.screen = 'results'; state.filter = 'issue'; state.jumpTo = null; if (!state.resultsTab) state.resultsTab = 'ALL'; render(); }
@@ -490,6 +504,34 @@
     return `<div class="runmap-wrap"><div class="runmap">
       <div class="rrow2 is-ruler"><span class="rlab"></span><span class="rcells">${ruler}</span><span class="rtail"><i>Fail · 확인</i></span></div>
       ${gs.map(rowFor).join('')}</div></div>`;
+  }
+  // 모든 화면이 같은 세 묶음으로 말하도록 한 곳에서 센다.
+  const tally = rows => {
+    const fail = rows.filter(s => !s.pass).length;
+    const warn = rows.filter(s => s.pass && s.ruleWarnKeys.length).length;
+    const ocr = rows.filter(s => s.pass && !s.ruleWarnKeys.length && s.lowKeys.length).length;
+    return { n: rows.length, fail, warn, ocr, need: fail + warn + ocr, pass: rows.length - fail };
+  };
+  // 회차 맵과 같은 색으로 읽히는 작은 띠. 위치 카드처럼 좁은 곳에 쓴다.
+  function miniStrip(rows, cap = TARGET) {
+    const by = new Map(rows.map(s => [s.i, s]));
+    let cells = '';
+    for (let i = 1; i <= cap; i++) {
+      const s = by.get(i);
+      if (!s) { cells += '<i class="mn-c"></i>'; continue; }
+      const k = issueOf(s);
+      cells += `<i class="mn-c ${k === 'fail' ? 'bad' : k === 'warn' ? 'warn' : k === 'low' ? 'low' : 'ok'}"></i>`;
+    }
+    return `<span class="mn-strip" style="--cap:${cap}">${cells}</span>`;
+  }
+  // 확인 필요 요약 한 줄. 검사 중·위치 선택·결과가 같은 문장을 쓴다.
+  function needSummary(rows, o = {}) {
+    const t = tally(rows);
+    if (!t.n) return `<div class="needbar is-empty">${icon('info')}<span>아직 수집한 회차가 없습니다.</span></div>`;
+    if (!t.need) return `<div class="needbar is-ok">${icon('check')}<span><b>${t.n}회 모두 정상</b> · 기준이 있는 ${RULED.length}개 항목이 전부 규칙 안에 있습니다.</span></div>`;
+    const bit = (k, label, c, tone) => c ? `<button type="button" class="needchip ${tone}" data-filter="${k}"><i></i>${label}<b>${c}</b></button>` : '';
+    return `<div class="needbar">${icon('alert')}<span class="need-l"><b>확인 필요 ${t.need}회</b><small>전체 ${t.n}회 중</small></span>
+      <span class="need-r">${bit('fail', 'Fail', t.fail, 'f')}${bit('warn', '주의', t.warn, 'w')}${bit('low', 'OCR 미확인', t.ocr, 'w')}</span></div>`;
   }
   const runLegend = () => '<span class="legend"><i class="rc ok"></i>Pass<i class="rc warn"></i>주의<i class="rc low"></i>OCR 미확인<i class="rc bad"></i>Fail<i class="rc"></i>미수집</span>';
 
@@ -611,7 +653,8 @@
           ${runMap(isAll ? all : all.filter(g => g.id === cur.id), { hi: hiSet })}
         </div>
       </section>
-      <section class="board board-1"><div class="card pad"><div class="box-head"><h3>${icon('alert')}확인이 필요한 회차</h3><span class="cap">번호를 누르면 그 회차의 당시 화면이 열립니다</span></div>${issueList(cur.rows)}</div></section>
+      <section class="board board-1"><div class="card pad"><div class="box-head"><h3>${icon('alert')}확인이 필요한 회차</h3><span class="cap">번호를 누르면 그 회차의 당시 화면이 열립니다</span></div>
+        <div class="need-wrap">${needSummary(cur.rows)}</div>${issueList(cur.rows)}</div></section>
       <section class="board board-2"><div class="card pad"><div class="box-head"><h3>${icon('spark')}어느 항목 때문인지</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, 'all')}</div>${recentFails(flat, 6)}</section>
       <section class="card log">
         <div class="log-head"><h2>${esc(cur.label)}<span class="sub">${shown.length}행 표시${shown.length !== cur.rows.length ? ` · 전체 ${cur.rows.length}행` : ''}</span></h2>
@@ -659,7 +702,7 @@
 
   let confirmAction = null;
   function openConfirm({ title, desc, cancel, ok, action, danger }) {
-    document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-desc').textContent = desc;
+    document.getElementById('confirm-title').textContent = title; document.getElementById('confirm-desc').innerHTML = desc;
     const c = confirmDlg.querySelector('[data-dlg="cancel"]'), k = confirmDlg.querySelector('[data-dlg="ok"]');
     c.hidden = !cancel; c.textContent = cancel || ''; k.textContent = ok; k.className = `btn ${danger ? 'btn-danger-solid' : 'btn-primary'}`; confirmAction = action; confirmDlg.showModal(); k.focus();
   }
