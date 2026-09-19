@@ -204,20 +204,13 @@ svg.i { width: 16px; height: 16px; flex: 0 0 auto; }
 /* ───── 1. S/N ───── */
 .sn-wrap { max-width: 620px; margin: var(--s5) auto 0; }
 .sn-card { padding: var(--s6) var(--s6) var(--s5); border-radius: var(--r-xl); }
-.sn-card .intro { color: var(--muted); margin-top: var(--s3); font-size: 15px; }
 .sn-field { margin-top: var(--s5); }
-.sn-field label { display: block; font-size: 13px; font-weight: 600; color: var(--ink-3); margin-bottom: var(--s3); }
 .sn-input { width: 100%; height: 64px; border: 0; border-radius: var(--r); padding: var(--s3) var(--s5); font-family: var(--num); font-size: 24px; font-weight: 600; letter-spacing: .5px; background: var(--sunken); text-transform: uppercase; transition: box-shadow .2s var(--ease), background .2s var(--ease); }
 .sn-input::placeholder { color: #c4ccd4; font-weight: 400; letter-spacing: 0; }
 .sn-input:focus { outline: none; background: var(--card); box-shadow: 0 0 0 2px var(--blue); }
 .sn-input[aria-invalid="true"] { box-shadow: 0 0 0 2px var(--red); }
-.sn-help { font-size: 13px; color: var(--muted); margin-top: var(--s3); }
 .sn-err { font-size: 13px; color: var(--red-text); margin-top: var(--s3); font-weight: 500; }
 .sn-actions { display: flex; justify-content: flex-end; gap: var(--s3); margin-top: var(--s5); }
-.sn-plan { margin-top: var(--s4); display: grid; grid-template-columns: repeat(3, 1fr); gap: var(--s2); }
-.plan { padding: var(--s3) var(--s4); border-radius: var(--r); background: var(--sunken); }
-.plan b { display: block; font-size: 21px; font-weight: 700; font-family: var(--num); }
-.plan span { font-size: 12px; color: var(--muted); }
 
 /* ───── 2. 위치 선택 ───── */
 /* 장비의 실제 배치를 그대로 옮긴 자리(1·2 나란히, 3은 오른쪽 끝). 글로 설명하지 않는다. */
@@ -490,17 +483,6 @@ table.tbl tr.is-target td.idx, table.tbl tr.is-target td.judge { background: #fa
 .needchip.w i { background: var(--map-warn); }
 .needchip.f b { color: var(--red-text); } .needchip.w b { color: var(--amber-text); }
 
-/* ───── S/N 화면의 판정 기준 미리보기 ───── */
-.sn-rules { margin-top: var(--s4); padding-top: var(--s4); border-top: 1px solid var(--hair); display: grid; gap: var(--s2); }
-.sn-rules-h { display: flex; align-items: center; gap: var(--s2); font-size: 13px; font-weight: 600; color: var(--ink-2); }
-.sn-rules-h svg { width: 16px; height: 16px; color: var(--faint); }
-.sn-rules-h small { font-weight: 400; color: var(--faint); font-size: 12px; margin-left: auto; }
-.sn-rule-chips { display: flex; flex-wrap: wrap; gap: var(--s2); }
-.rchip { display: inline-flex; align-items: baseline; gap: 4px; padding: 2px var(--s2); border-radius: var(--r-xs);
-  background: var(--sunken); font-size: 11.5px; color: var(--ink-3); }
-.rchip b { font-family: var(--num); font-size: 10px; font-weight: 700; color: var(--faint); }
-.rchip i { font-style: normal; font-family: var(--num); font-size: 11.5px; font-weight: 600; color: var(--blue-text); }
-
 /* ───── 1~600 회차 맵 ───── */
 /* 한 칸이 회차 하나, 한 줄이 위치·모드 하나(100회). 여섯 줄로 600회가 들어온다. */
 .runmap-wrap { overflow-x: auto; }
@@ -648,7 +630,7 @@ body:not(.preview) .action-bar { bottom: 44px; }
   .pos-done-badge { top: var(--s4); right: var(--s4); width: 28px; height: 28px; }
   .pos-bar { left: var(--s4); right: var(--s4); bottom: var(--s4); }
   .head { flex-direction: column; align-items: stretch; }
-  .sn-card { padding: var(--s5); } .sn-plan { grid-template-columns: 1fr; }
+  .sn-card { padding: var(--s5); }
   .action-bar { flex-wrap: wrap; }
   .action-bar .actions { width: 100%; }
   .action-bar .actions .btn { flex: 1; }

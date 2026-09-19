@@ -320,11 +320,8 @@
   }
 
   function renderSerial() {
-    app.innerHTML = `<div class="sn-wrap"><section class="card sn-card"><h1>S/N 입력</h1><p class="intro">장비 라벨의 S/N을 입력하면 위치 선택으로 넘어갑니다.</p>
-      <form id="sn-form" novalidate><div class="sn-field"><label for="sn-input">S/N</label><input class="sn-input" id="sn-input" placeholder="SN-2026-001234" maxlength="32" autocomplete="off" spellcheck="false" value="${esc(state.serial)}" aria-describedby="sn-help sn-err"><p class="sn-help" id="sn-help">영문·숫자·하이픈, 6자 이상</p><p class="sn-err" id="sn-err" role="alert" hidden></p></div>
-      <div class="sn-plan"><div class="plan"><b>${TARGET * 6}</b><span>총 회차 · 3 × 2 × ${TARGET}</span></div><div class="plan"><b>${FIELDS.length}</b><span>서비스모드 항목</span></div><div class="plan"><b>${RULED.length}</b><span>기준이 있는 항목</span></div></div>
-      <div class="sn-rules"><span class="sn-rules-h">${icon('list')}판정 기준<small>기준이 없는 ${FIELDS.length - RULED.length}개는 값만 기록합니다</small></span>
-        <span class="sn-rule-chips">${RULED.map(f => `<span class="rchip"><b>${f.n}</b>${esc(f.label)}<i>${esc(ruleText(f))}</i></span>`).join('')}</span></div>
+    app.innerHTML = `<div class="sn-wrap"><section class="card sn-card"><h1>S/N 입력</h1>
+      <form id="sn-form" novalidate><div class="sn-field"><label class="sr-only" for="sn-input">S/N</label><input class="sn-input" id="sn-input" placeholder="SN-2026-001234" maxlength="32" autocomplete="off" spellcheck="false" value="${esc(state.serial)}" aria-describedby="sn-err"><p class="sn-err" id="sn-err" role="alert" hidden></p></div>
       <div class="sn-actions"><button type="reset" class="btn btn-xl">Cancel</button><button type="submit" class="btn btn-xl btn-primary">OK ${icon('arrow')}</button></div></form></section></div>`;
     const form = document.getElementById('sn-form'), input = document.getElementById('sn-input'), err = document.getElementById('sn-err'); input.focus();
     form.addEventListener('submit', e => { e.preventDefault(); const v = input.value.trim().toUpperCase(); if (!/^[A-Z0-9-]{6,}$/.test(v)) { err.textContent = '형식이 올바르지 않습니다. 영문·숫자·하이픈 6자 이상으로 입력하세요.'; err.hidden = false; input.setAttribute('aria-invalid', 'true'); input.focus(); return; } state.serial = v; state.screen = 'position'; render(); });
