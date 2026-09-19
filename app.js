@@ -1,4 +1,4 @@
-/* Vision AI 검사 콘솔 — 시안 B. 흐름: S/N → 위치 선택 → 검사(▷ ⏸ ◻, 카메라 숫자 감지, Pass/Fail 로그) → 결과(그룹·표·업로드) → Fail 당시 화면 */
+/* ruvy 검사 콘솔 — 시안 B. 흐름: S/N → 위치 선택 → 검사(▷ ⏸ ◻, 카메라 숫자 감지, Pass/Fail 로그) → 결과(그룹·표·업로드) → Fail 당시 화면 */
 'use strict';
 (() => {
   const TARGET = 100, MODES = ['MP', 'Normal'];
@@ -131,12 +131,18 @@
   }
   function renderRail() {
     const idx = stepIndex(), rows = allRows(), fails = failCount(rows);
-    document.getElementById('gnb-menu').innerHTML = STEPS.map(st => {
+    // 상단 메뉴는 그냥 링크 묶음이 아니라 검사 흐름 그 자체 — 지나온 단계는 체크, 지금은 채운 알약, 앞은 흐리게.
+    document.getElementById('gnb-menu').innerHTML = STEPS.map((st, i) => {
+      const done = st.n < idx, on = st.n === idx;
       const reach = st.n <= idx || (st.key === 'results' && anySamples());
-      return `<button type="button" class="gnb-i${st.n === idx ? ' is-on' : ''}" data-step="${st.key}"${reach ? '' : ' disabled'}>${st.label}${st.key === 'results' && fails ? `<span class="gnb-dot"></span>` : ''}</button>`;
+      const badge = st.key === 'results' && fails ? `<em class="step-badge">${fails}</em>` : '';
+      return `${i ? '<span class="step-link" aria-hidden="true"></span>' : ''}<button type="button" class="step${on ? ' is-on' : done ? ' is-done' : ''}" data-step="${st.key}"${reach ? '' : ' disabled'}${on ? ' aria-current="step"' : ''}>
+        <span class="step-n">${done ? icon('check') : st.n}</span><span class="step-l">${st.label}</span>${badge}</button>`;
     }).join('');
     document.getElementById('gnb-menu').querySelectorAll('[data-step]').forEach(b => b.addEventListener('click', () => goStep(b.dataset.step)));
-    document.getElementById('gnb-sn').innerHTML = state.serial ? `<i>S/N</i>${esc(state.serial)}` : '';
+    const snEl = document.getElementById('gnb-sn');
+    snEl.hidden = !state.serial;
+    snEl.innerHTML = state.serial ? `<i>S/N</i><b>${esc(state.serial)}</b>` : '';
 
     const cta = document.getElementById('gnb-cta');
     const plan = { serial: null, position: null, inspect: ['결과 보기', () => goResults()], results: [state.uploaded ? '업로드 완료' : '업로드', () => uploadNow()] }[state.screen];
@@ -152,7 +158,8 @@
        <span class="st st-right">진행 <b class="num">${rows.length}</b> / ${TARGET * 6}<span class="st-bar"><i style="width:${pct.toFixed(1)}%"></i></span></span>`;
 
     const q = document.getElementById('q'), on = state.screen === 'inspect' || state.screen === 'results';
-    q.disabled = !on; q.placeholder = on ? '회차 · 시각 · 읽은 값 검색' : '검사가 시작되면 검색할 수 있습니다';
+    q.disabled = !on; q.placeholder = on ? '회차 · 읽은 값 검색' : '검사 시작 후 검색';
+    document.getElementById('search-form').classList.toggle('is-off', !on);
     if (q.value !== state.q) q.value = state.q;
 
     renderTicker();

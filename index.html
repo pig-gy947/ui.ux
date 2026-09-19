@@ -4,22 +4,26 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <meta name="color-scheme" content="light">
-<title>Vision AI 검사 콘솔 — 시안 B</title>
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='8' fill='%233182F6'/%3E%3Cpath d='M8 11h4l4 11 4-11h4' stroke='%23fff' stroke-width='2.6' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<title>ruvy 검사 콘솔 — 시안 B</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='9' fill='%2311121B'/%3E%3Crect x='10' y='7' width='6' height='18' rx='1' fill='%236454EF'/%3E%3Crect x='19' y='13' width='4' height='12' rx='1' fill='%23fff'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="styles.css">
 </head>
 <body>
 <div class="app">
   <header class="gnb">
-    <a class="logo" href="?"><span class="logo-mark" aria-hidden="true"></span>Vision AI</a>
-    <nav class="gnb-menu" id="gnb-menu" aria-label="검사 단계"></nav>
-    <form class="gnb-search" id="search-form" role="search">
-      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
-      <label class="sr-only" for="q">회차 검색</label>
-      <input id="q" type="search" placeholder="회차 · 시각 · 읽은 값 검색" autocomplete="off" spellcheck="false">
-      <kbd>/</kbd>
-    </form>
+    <a class="brand" href="?" aria-label="ruvy 검사 콘솔">
+      <img class="brand-logo" src="assets/logo.png" alt="ruvy" width="693" height="264">
+      <span class="brand-sep" aria-hidden="true"></span>
+      <span class="brand-app">검사 콘솔</span>
+    </a>
+    <nav class="steps" id="gnb-menu" aria-label="검사 단계"></nav>
     <div class="gnb-right">
+      <form class="gnb-search" id="search-form" role="search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <label class="sr-only" for="q">회차 검색</label>
+        <input id="q" type="search" placeholder="회차 · 읽은 값 검색" autocomplete="off" spellcheck="false">
+        <kbd>/</kbd>
+      </form>
       <span class="gnb-sn" id="gnb-sn"></span>
       <button type="button" class="btn btn-primary" id="gnb-cta"></button>
     </div>
