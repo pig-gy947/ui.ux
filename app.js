@@ -1,4 +1,4 @@
-/* ruvy 검사 콘솔 — 시안 B. 흐름: S/N → 위치 선택 → 검사(▷ ⏸ ◻, 카메라 숫자 감지, Pass/Fail 로그) → 결과(그룹·표·업로드) → Fail 당시 화면 */
+/* ruvy 검사 콘솔. 흐름: S/N → 위치 선택 → 검사(▷ ⏸ ◻, 카메라 숫자 감지, Pass/Fail 로그) → 결과(그룹·표·업로드) → Fail 당시 화면 */
 'use strict';
 (() => {
   const TARGET = 100, MODES = ['MP', 'Normal'];
