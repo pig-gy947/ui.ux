@@ -475,38 +475,55 @@ table.tbl tr.is-target td.idx, table.tbl tr.is-target td.judge { background: #fa
 .fchip.l { background: var(--sunken); color: var(--muted); }
 .ok-dash { color: var(--faint); font-size: 12.5px; }
 
-/* ───── 회차 × 항목 매트릭스 ───── */
-/* 가로 = 회차, 세로 = 서비스모드 26개 항목. 한 칸이 그 회차에서 그 항목의 판정. */
-/* 100열이라 좁은 화면에서는 가로로 스크롤한다. 칸이 5px 아래로 얇아지지 않게 최소 폭을 잡아 둔다. */
-.matrix-wrap { overflow-x: auto; }
-.matrix { display: grid; gap: 2px; padding-right: var(--s3); min-width: 840px; }
-.mrow { display: grid; grid-template-columns: 200px minmax(0, 1fr) 34px; align-items: center; gap: var(--s3); }
-.mlab { display: flex; align-items: center; gap: var(--s2); min-width: 0; font-size: 12px; color: var(--ink-3); }
-.mn { font-family: var(--num); font-size: 10px; font-weight: 700; color: var(--faint); background: var(--sunken);
-  border-radius: var(--s1); padding: 1px 5px; min-width: 22px; text-align: center; flex: 0 0 auto; }
-.mnm { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.mnm.sum { font-weight: 700; color: var(--ink); }
-.mcells { display: grid; grid-template-columns: repeat(var(--cols, 100), minmax(0, 1fr)); gap: 2px; }
-.mc { display: block; height: 11px; border-radius: 3px; background: var(--map-empty); transition: transform .15s var(--ease); }
-.mc.ok { background: var(--map-pass); }
-.mc.rec { background: #ccd2e0; }
-.mc.warn { background: var(--map-warn); }
-.mc.bad { background: var(--map-fail); }
-.mc.dim { opacity: .18; }
-.mc.tap { cursor: pointer; }
-.mc.tap:hover { transform: scaleY(2.2) scaleX(1.6); box-shadow: 0 4px 12px rgba(184, 18, 48, .4); position: relative; z-index: 2; }
-.mc.now { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--blue); }
-.mcnt { font-family: var(--num); font-size: 11px; text-align: right; color: var(--faint); }
-.mcnt.f { color: var(--red-text); font-weight: 700; }
-.mrow.is-sum .mc { height: 18px; border-radius: var(--s1); }
-.mrow.is-sum { margin-bottom: var(--s1); }
-.mrow.is-ruler { margin-bottom: var(--s2); }
-.mrow.is-ruler .mcells { gap: 2px; }
-.mt { font-family: var(--num); font-size: 9px; color: var(--faint); text-align: center; line-height: 1;
-  overflow: visible; white-space: nowrap; position: relative; }
-.mt.on::before { content: ""; position: absolute; left: 50%; top: -3px; width: 1px; height: 3px; background: var(--sunken-2); }
-.legend .mc { width: 12px; height: 12px; margin-left: var(--s2); border-radius: 3px; }
-.legend .mc:first-child { margin-left: 0; }
+/* ───── 1~600 회차 맵 ───── */
+/* 한 칸이 회차 하나, 한 줄이 위치·모드 하나(100회). 여섯 줄로 600회가 들어온다. */
+.runmap-wrap { overflow-x: auto; }
+.runmap { display: grid; gap: var(--s1); min-width: 720px; padding-right: var(--s2); }
+.rrow2 { display: grid; grid-template-columns: 132px minmax(0, 1fr) 62px; align-items: center; gap: var(--s3); }
+.rlab { display: grid; line-height: 1.35; }
+.rlab b { font-size: 13px; font-weight: 600; color: var(--ink-2); white-space: nowrap; }
+.rlab small { font-size: 11px; color: var(--faint); }
+.rcells { display: grid; grid-template-columns: repeat(100, minmax(0, 1fr)); gap: 2px; }
+.rc { display: block; height: 22px; border-radius: var(--s1); background: var(--map-empty); transition: transform .15s var(--ease); }
+.rc.ok { background: var(--map-pass); }
+.rc.warn { background: var(--map-warn); }
+.rc.low { background: #ffd166; }
+.rc.bad { background: var(--map-fail); }
+.rc.dim { opacity: .16; }
+.rc.tap { cursor: pointer; }
+.rc.tap:hover { transform: scaleX(2.4) scaleY(1.12); box-shadow: 0 4px 14px rgba(184, 18, 48, .42); position: relative; z-index: 2; }
+.rc.now { box-shadow: 0 0 0 2px var(--card), 0 0 0 4px var(--blue); }
+.rtail { display: flex; align-items: baseline; gap: var(--s2); justify-content: flex-end; font-family: var(--num); font-size: 12px; }
+.rtail b { font-weight: 700; } .rtail b.c-ok { color: var(--faint); font-weight: 400; }
+.rtail i { font-style: normal; font-size: 11px; }
+.rrow2.is-ruler .rcells { gap: 2px; }
+.rrow2.is-ruler .rtail { font-size: 10px; color: var(--faint); }
+.rt { position: relative; height: 10px; }
+.rt b { position: absolute; left: 50%; top: 0; transform: translateX(-50%); font-family: var(--num); font-size: 10px; font-weight: 500; color: var(--faint); line-height: 1; }
+.legend .rc { width: 12px; height: 12px; margin-left: var(--s2); border-radius: 3px; }
+.legend .rc:first-child { margin-left: 0; }
+
+/* ───── 확인이 필요한 회차 ───── */
+.isec + .isec { margin-top: var(--s5); padding-top: var(--s5); border-top: 1px solid var(--hair); }
+.ihead { display: flex; align-items: center; gap: var(--s2); flex-wrap: wrap; margin-bottom: var(--s3); }
+.ihead b { font-size: 14px; }
+.idot { width: 8px; height: 8px; border-radius: 50%; background: var(--map-fail); flex: 0 0 auto; }
+.idot.warn { background: var(--map-warn); }
+.icnt { font-family: var(--num); font-size: 13px; font-weight: 700; color: var(--faint); }
+.ihead .cap { margin-left: var(--s2); }
+.ihead .btn { margin-left: auto; }
+.nchips { display: flex; flex-wrap: wrap; gap: var(--s2); }
+.nchip { font-family: var(--num); font-size: 13px; font-weight: 700; border: 0; border-radius: var(--r-xs);
+  padding: var(--s1) var(--s3); background: var(--red-bg); color: var(--red-text); transition: background .15s var(--ease); }
+.nchip:hover { background: #fadde1; }
+.nchip.warn { background: var(--amber-bg); color: var(--amber-text); }
+.nchip.warn:hover { background: #ffe8c4; }
+.nmore { align-self: center; font-size: 12px; color: var(--faint); }
+.gno { font-family: var(--num); font-size: 13px; font-weight: 700; color: var(--blue-text); background: var(--blue-bg); border-radius: var(--r-xs); padding: 2px var(--s2); }
+.chip.c-issue.is-on { background: var(--blue); }
+.tbl-log td.idx b { display: block; font-family: var(--num); font-size: 14px; color: var(--ink); margin: 0; }
+.tbl-log td.idx small { display: block; font-size: 11px; color: var(--faint); }
+.frow-l b .sub2 { font-size: 11px; font-weight: 400; color: var(--faint); margin-left: var(--s1); }
 
 /* ───── 판정 기준 표 ───── */
 .rules { display: grid; gap: 1px; max-height: 320px; overflow-y: auto; }

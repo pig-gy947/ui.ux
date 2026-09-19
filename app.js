@@ -105,7 +105,7 @@
   const hms = d => `${pad(d.getHours(), 2)}:${pad(d.getMinutes(), 2)}:${pad(d.getSeconds(), 2)}`;
 
   const freshPositions = () => [1, 2, 3].map(id => ({ id, done: false, MP: [], Normal: [] }));
-  const state = { screen: 'serial', serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), showRoi: true, resultsTab: null, uploaded: null, timer: null, last: null, filter: 'all', jumpTo: null, q: '' };
+  const state = { screen: 'serial', serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), showRoi: true, resultsTab: null, uploaded: null, timer: null, last: null, filter: 'issue', jumpTo: null, q: '' };
   const app = document.getElementById('app'), confirmDlg = document.getElementById('confirm'), failDlg = document.getElementById('fail-dialog');
   const photo = new Image(); photo.src = IMG.src; photo.onload = () => drawThumbs();
   const pos = () => state.positions[state.position - 1];
@@ -233,8 +233,14 @@
         sparkline(bucket(rows, 24, b => b.filter(s => s.pass).length / b.length * 100), 'up'))}
       ${card('Fail', fails ? '확인 필요' : '없음', 'down', fails.toLocaleString(), '', fails ? `전체의 ${(fails / (n || 1) * 100).toFixed(1)}%` : '기준값 전부 일치',
         sparkline(bucket(rows, 24, (_, acc) => failCount(acc)), 'down'))}
-      ${card('평균 신뢰도', low ? `80%↓ ${low}` : '안정', low ? 'warn' : 'up', conf.toFixed(1), '%', low ? `${low}회 확인 권장` : '전 회차 80% 이상',
-        sparkline(bucket(rows, 24, b => b.reduce((a, s) => a + avgConf(s), 0) / b.length), low ? 'warn' : 'up'))}
+      ${(() => {
+        const warn = rows.filter(s => s.pass && s.ruleWarnKeys.length).length;
+        const ocr = rows.filter(s => s.pass && !s.ruleWarnKeys.length && s.lowKeys.length).length;
+        const need = fails + warn + ocr;
+        return card('평균 신뢰도', need ? `확인 필요 ${need}` : '안정', need ? 'warn' : 'up', conf.toFixed(1), '%',
+          need ? `Fail ${fails} · 주의 ${warn} · OCR 미확인 ${ocr}` : '전 회차 정상',
+          sparkline(bucket(rows, 24, b => b.reduce((a, s) => a + avgConf(s), 0) / b.length), need ? 'warn' : 'up'));
+      })()}
     </section>`;
   }
   function renderRail() {
@@ -280,7 +286,7 @@
     const list = rows.filter(s => !s.pass).slice(-n).reverse();
     return `<div class="card pad"><div class="box-head"><h3>${icon('alert')}최근 Fail</h3><span class="cap">${failCount(rows)}건</span></div>
       ${list.length ? `<div class="flist">${list.map(s => { const f = FIELDS.find(x => x.key === s.failKey);
-        return `<button type="button" class="frow" data-ref="${refOf(s)}"><span class="frow-l"><b>${s.position}·${esc(s.mode)} <span class="num">${pad(s.i)}</span></b><small>${f.n}. ${esc(f.label)} · ${esc(reason(f, s.fields))}</small></span><small class="num frow-t">${s.t}</small></button>`; }).join('')}</div>`
+        return `<button type="button" class="frow" data-ref="${refOf(s)}"><span class="frow-l"><b><span class="num">${giPad(s)}</span>번 <small class="sub2">${s.position}·${esc(s.mode)} ${pad(s.i)}</small></b><small>${f.n}. ${esc(f.label)} · ${esc(reason(f, s.fields))}</small></span><small class="num frow-t">${s.t}</small></button>`; }).join('')}</div>`
         : `<p class="empty">아직 Fail이 없습니다.</p>`}</div>`;
   }
   // 위치·모드 진행 — 오른쪽 열에 있던 관심 종목 목록을 본문 패널로.
@@ -294,15 +300,17 @@
           <span class="duo"><i class="p" style="width:${pass / TARGET * 100}%"></i><i class="f" style="width:${f / TARGET * 100}%"></i></span></span></button>`; }).join('')}</div></div>`;
   }
   function renderTicker() {
-    const rows = allRows(), n = rows.length, fails = failCount(rows), low = rows.filter(s => s.pass && isWarn(s)).length;
+    const rows = allRows(), n = rows.length, fails = failCount(rows);
     const conf = n ? rows.reduce((a, s) => a + avgConf(s), 0) / n : 0, last = rows.filter(s => !s.pass).slice(-1)[0];
+    const warn = rows.filter(s => s.pass && s.ruleWarnKeys.length).length;
+    const ocr = rows.filter(s => s.pass && !s.ruleWarnKeys.length && s.lowKeys.length).length;
     const it = (k, v, tone) => `<span class="tk"><i>${k}</i><b class="num${tone ? ' c-' + tone : ''}">${v}</b></span>`;
     document.getElementById('ticker').innerHTML =
       `<span class="tk tk-sn"><i>S/N</i><b>${state.serial ? esc(state.serial) : '—'}</b></span>` +
       it('수집', `${n} / ${TARGET * 6}`) + it('Pass', n - fails, 'up') + it('Fail', fails, fails ? 'down' : '') +
       it('Pass율', `${n ? (100 - fails / n * 100).toFixed(1) : '—'}%`) + it('평균 신뢰도', `${conf.toFixed(1)}%`) +
-      it('신뢰도 80%↓', low, low ? 'warn' : '') +
-      (last ? `<span class="tk"><i>최근 Fail</i><b>${last.position}·${esc(last.mode)} <span class="num">${pad(last.i)}</span> · ${esc(FIELDS.find(x => x.key === last.failKey).label)}</b></span>` : '');
+      it('주의', warn, warn ? 'warn' : '') + it('OCR 미확인', ocr, ocr ? 'warn' : '') +
+      (last ? `<span class="tk"><i>최근 Fail</i><b><span class="num">${giPad(last)}</span>번 · ${esc(FIELDS.find(x => x.key === last.failKey).label)}</b></span>` : '');
   }
   function uploadNow() {
     if (!anySamples() || state.uploaded) return;
@@ -364,18 +372,18 @@
         ${stateNote(last, state, done)}
         ${recentFails(list, 4)}</aside></div>
     <section class="board">
-      <div class="card pad map-panel"><div class="box-head"><h3>${icon('grid')}회차 × 항목<small>${count} / ${TARGET}</small></h3>${matrixLegend()}</div>
-        ${matrix(list, { live: true, hi: hiSet })}</div>
+      <div class="card pad map-panel"><div class="box-head"><h3>${icon('grid')}회차 맵<small>${count} / ${TARGET}</small></h3>${runLegend()}</div>
+        ${runMap(groups().filter(g => g.pos === p.id && g.mode === state.mode), { live: true, hi: hiSet })}</div>
       <div class="card pad"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>
     </section>
     <section class="card log" aria-labelledby="log-title"><div class="log-head"><h2 id="log-title">Pass / Fail<span class="sub">${count ? `${shown.length}행 표시${shown.length !== count ? ` · 전체 ${count}행` : ''} · 최신순` : '기록 없음'}</span></h2>
       <div class="head-right">${count ? filterBar(base, state.filter) : ''}${failNav(shown)}<button type="button" class="btn btn-sm" data-action="excel"${count ? '' : ' disabled'}>${icon('download')}Excel</button></div></div>
-      <div class="tbl-wrap">${shown.length ? table(shown, { newest: state.filter === 'all', mode: state.mode }) : `<div class="tbl-empty">${icon('table')}<p>${count ? '이 조건에 해당하는 회차가 없습니다.' : '▷ 시작을 누르면 1회마다 한 행씩 기록됩니다.'}</p></div>`}</div></section>`;
+      <div class="tbl-wrap">${shown.length ? table(shown, { newest: state.filter === 'all' }) : `<div class="tbl-empty">${icon('table')}<p>${count ? '이 조건에 해당하는 회차가 없습니다.' : '▷ 시작을 누르면 1회마다 한 행씩 기록됩니다.'}</p></div>`}</div></section>`;
     bind('start', () => { state.status = 'running'; if (!count) addSample(); startTimer(); render(); });
     bind('pause', () => { stopTimer(); state.status = 'paused'; render(); });
     bind('stop', requestStop);
     bind('excel', () => exportCsv(list, `${state.serial}_pos${p.id}_${state.mode}`));
-    app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { stopTimer(); state.mode = b.dataset.mode; state.status = 'idle'; state.last = null; state.filter = 'all'; state.jumpTo = null; render(); }));
+    app.querySelectorAll('[data-mode]').forEach(b => b.addEventListener('click', () => { stopTimer(); state.mode = b.dataset.mode; state.status = 'idle'; state.last = null; state.filter = 'issue'; state.jumpTo = null; render(); }));
     document.getElementById('roi-toggle').addEventListener('change', e => { state.showRoi = e.target.checked; render(); });
     wireList(shown);
   }
@@ -385,7 +393,7 @@
     openConfirm({ title: `위치 ${p.id} 검사를 중지할까요?`, desc: `중지하면 위치 ${p.id}은(는) 완료로 표시되고 위치 선택으로 돌아갑니다. 지금까지 수집한 ${MODES.map(m => `${m} ${p[m].length}회`).join(', ')}는 결과에 남습니다.`, cancel: '계속 검사', ok: '중지하고 완료 표시', danger: true, action: () => { p.done = true; goPositions(); } });
   }
   function goPositions() { stopTimer(); state.status = 'idle'; state.selected = null; state.screen = 'position'; render(); }
-  function goResults() { stopTimer(); state.status = 'idle'; state.screen = 'results'; state.filter = 'all'; state.jumpTo = null; if (!state.resultsTab) state.resultsTab = 'ALL'; render(); }
+  function goResults() { stopTimer(); state.status = 'idle'; state.screen = 'results'; state.filter = 'issue'; state.jumpTo = null; if (!state.resultsTab) state.resultsTab = 'ALL'; render(); }
 
   // 26개 태그가 한 화면에 붙으므로 이름 대신 "번호 · 값"으로 줄이고, 항목마다 좌·우를 지정해 겹치지 않게 둔다.
   const TAG_RIGHT = new Set([11, 13, 14, 15, 16, 17, 18, 19, 20, 21, 22, 23, 25, 26]);
@@ -419,88 +427,86 @@
   }
 
   // ── 100회 이상을 한눈에: 회차 맵 · 항목별 Fail · 필터 ──
-  const PER_ROW = 25;                       // 회차 맵 한 줄에 그리는 칸 수 (100회 = 4줄)
   const isWarn = s => s.warnKeys.length > 0;
   const refOf = s => `${s.position}-${s.mode}-${s.i}`;
+  // 검사 전체를 1~600 한 줄로 센 번호. 화면에서는 이 번호로 부른다.
+  const gi = s => (s.position - 1) * MODES.length * TARGET + MODES.indexOf(s.mode) * TARGET + s.i;
+  const giPad = s => pad(gi(s), 3);
   const failCount = rows => rows.reduce((n, s) => n + (s.pass ? 0 : 1), 0);
   function queryRows(rows, q) {
     const t = (q || '').trim().toLowerCase();
     if (!t) return rows;
     return rows.filter(s => {
-      if (pad(s.i).includes(t) || String(s.i) === t || s.t.includes(t)) return true;
+      if (giPad(s).includes(t) || String(gi(s)) === t || pad(s.i).includes(t) || s.t.includes(t)) return true;
       if (`${s.position}·${s.mode}`.toLowerCase().includes(t) || `위치 ${s.position}`.includes(t)) return true;
       if ((s.pass ? 'pass' : 'fail').startsWith(t)) return true;
       return TABLE_FIELDS.some(f => String(s.fields[f.key].v).toLowerCase().includes(t) || (s.failKeys.includes(f.key) && f.label.toLowerCase().includes(t)));
     });
   }
   function filterRows(rows, f) {
+    if (f === 'issue') return rows.filter(s => !s.pass || s.ruleWarnKeys.length || s.lowKeys.length);
     if (f === 'fail') return rows.filter(s => !s.pass);
-    if (f === 'warn') return rows.filter(s => s.pass && isWarn(s));
+    if (f === 'warn') return rows.filter(s => s.pass && s.ruleWarnKeys.length);
+    if (f === 'low') return rows.filter(s => s.pass && !s.ruleWarnKeys.length && s.lowKeys.length);
     if (f && f.startsWith('k:')) { const k = f.slice(2); return rows.filter(s => s.failKeys.includes(k)); }
     return rows;
   }
   function cellTitle(s) {
-    const head = `${pad(s.i)}회 · ${s.t}`;
+    const head = `${giPad(s)}번 (${s.position}·${s.mode} ${pad(s.i)}회) · ${s.t}`;
     if (s.pass) return `${head} · Pass${isWarn(s) ? ' · 신뢰도 낮음' : ''}`;
     const f = FIELDS.find(x => x.key === s.failKey);
     return `${head} · Fail · ${f.n}. ${f.label} ${reason(f, s.fields)}${s.failKeys.length > 1 ? ` 외 ${s.failKeys.length - 1}개 항목` : ''}`;
   }
-  // 한 그룹(위치·모드)의 전 회차를 칸 하나씩. 아직 안 찍은 회차도 빈 칸으로 그려 진행도가 같이 보인다.
-  function shotMap(rows, o = {}) {
-    const per = o.per || PER_ROW;
-    const total = o.total || TARGET, by = new Map(rows.map(s => [s.i, s])), newest = rows.length ? rows[rows.length - 1].i : 0;
-    let out = '';
-    for (let start = 1; start <= total; start += per) {
+  // ── 1~600 회차 맵 ──
+  // 항목을 늘어놓지 않는다. 한 칸이 회차 하나고, 몇 번째 회차가 Fail인지만 보여준다.
+  // 한 줄이 위치·모드 하나(100회)라 여섯 줄로 600회가 들어온다.
+  const issueOf = s => !s.pass ? 'fail' : s.ruleWarnKeys.length ? 'warn' : s.lowKeys.length ? 'low' : 'pass';
+  function runMap(gs, o = {}) {
+    const rowFor = g => {
+      const by = new Map(g.rows.map(s => [s.i, s]));
+      const from = (g.pos - 1) * MODES.length * TARGET + MODES.indexOf(g.mode) * TARGET;
       let cells = '';
-      for (let i = start; i < start + per && i <= total; i++) {
+      for (let i = 1; i <= TARGET; i++) {
         const s = by.get(i);
-        if (!s) { cells += '<i class="cell"></i>'; continue; }
-        const cls = (s.pass ? (isWarn(s) ? 'ok warn' : 'ok') : 'bad tap') + (o.live && i === newest ? ' now' : '') + (o.hi && !o.hi.has(refOf(s)) ? ' dim' : '');
-        cells += `<i class="cell ${cls}" data-ref="${refOf(s)}" title="${esc(cellTitle(s))}"${s.pass ? '' : ' role="button" tabindex="0" aria-label="' + esc(cellTitle(s)) + '"'}></i>`;
+        if (!s) { cells += '<i class="rc"></i>'; continue; }
+        const k = issueOf(s), n = gi(s);
+        const cls = k === 'fail' ? 'bad' : k === 'warn' ? 'warn' : k === 'low' ? 'low' : 'ok';
+        const tip = k === 'fail' ? `${n}번 · Fail · ${s.failKeys.map(x => `${BY_KEY[x].n}. ${BY_KEY[x].label}`).join(', ')}`
+          : k === 'low' ? `${n}번 · OCR 미확인 · ${s.lowKeys.map(x => BY_KEY[x].label).join(', ')}`
+          : k === 'warn' ? `${n}번 · 주의 · ${s.ruleWarnKeys.map(x => BY_KEY[x].label).join(', ')}` : `${n}번 · Pass`;
+        const dim = o.hi && !o.hi.has(refOf(s)) ? ' dim' : '';
+        const now = o.live && i === g.rows.length ? ' now' : '';
+        const tap = k !== 'pass';
+        cells += `<i class="rc ${cls}${dim}${now}${tap ? ' tap' : ''}" title="${esc(tip)}"${tap ? ` data-ref="${refOf(s)}" role="button" tabindex="0"` : ''}></i>`;
       }
-      out += `<div class="map-row">${o.compact ? '' : `<span class="map-lbl">${pad(start)}</span>`}<div class="map-cells">${cells}</div></div>`;
-    }
-    return `<div class="shotmap${o.compact ? ' compact' : ''}${o.tight ? ' tight' : ''}" style="--per:${per}">${out}</div>`;
-  }
-  // ── 회차 × 항목 매트릭스 ──
-  // 가로는 회차, 세로는 서비스모드 26개 항목. 한 칸이 "그 회차에서 그 항목의 판정"이다.
-  // 어느 항목이 언제 어긋났는지가 한 판에 보인다. Fail 칸을 누르면 그 회차가 그 항목에 맞춰 열린다.
-  function matrix(rows, o = {}) {
-    const total = o.total || TARGET, by = new Map(rows.map(s => [s.i, s]));
-    const newest = rows.length ? rows[rows.length - 1].i : 0;
-    const cellFor = (s, f) => {
-      if (!s) return { cls: '', title: '' };
-      const d = f ? s.fields[f.key] : null, low = d ? d.conf < 80 : s.lowKeys.length > 0;
-      const v = f ? verdict(f, s.fields) : (s.pass ? 'pass' : 'fail');
-      const cls = v === 'fail' ? 'bad' : v === 'warn' ? 'warn' : low ? 'warn' : v === 'none' ? 'rec' : 'ok';
-      const head = `${pad(s.i)}회 · ${s.t}`;
-      const title = f
-        ? `${head}\n${f.n}. ${f.label} = ${d.v}${f.unit || ''}  (기준 ${ruleText(f)})\n${v === 'fail' ? '기준 벗어남' : v === 'warn' ? '주의 구간' : v === 'none' ? '기록만' : '정상'}${low ? ` · 신뢰도 ${d.conf}%` : ''}`
-        : `${head}\n${s.pass ? 'Pass' : `Fail · ${s.failKeys.length}개 항목`}`;
-      return { cls, title, tap: v === 'fail' || v === 'warn' || (!f && !s.pass) };
-    };
-    const line = (f, extra) => {
-      let cells = '';
-      for (let i = 1; i <= total; i++) {
-        const s = by.get(i), c = cellFor(s, f);
-        if (!s) { cells += '<i class="mc"></i>'; continue; }
-        const hi = o.hi && !o.hi.has(refOf(s)) ? ' dim' : '';
-        const now = o.live && i === newest ? ' now' : '';
-        cells += `<i class="mc ${c.cls}${hi}${now}${c.tap ? ' tap' : ''}" title="${esc(c.title)}"${c.tap ? ` data-ref="${refOf(s)}"${f ? ` data-key="${f.key}"` : ''} role="button" tabindex="0"` : ''}></i>`;
-      }
-      const n = f ? rows.filter(s => verdict(f, s.fields) === 'fail').length : failCount(rows);
-      return `<div class="mrow${extra || ''}">
-        <span class="mlab">${f ? `<b class="mn">${f.n}</b><span class="mnm">${esc(f.label)}</span>` : '<span class="mnm sum">회차 판정</span>'}</span>
-        <span class="mcells">${cells}</span>
-        <b class="mcnt${n ? ' f' : ''}">${n || ''}</b></div>`;
+      const f = failCount(g.rows), low = g.rows.filter(s => s.pass && (s.lowKeys.length || s.ruleWarnKeys.length)).length;
+      return `<div class="rrow2">
+        <span class="rlab"><b>${esc(g.label)}</b><small class="num">${pad(from + 1)}–${pad(from + TARGET)}</small></span>
+        <span class="rcells">${cells}</span>
+        <span class="rtail">${f ? `<b class="c-down">${f}</b>` : '<b class="c-ok">0</b>'}${low ? `<i class="c-warn">${low}</i>` : ''}</span></div>`;
     };
     let ruler = '';
-    for (let i = 1; i <= total; i++) ruler += `<i class="mt${i % 10 === 0 ? ' on' : ''}">${i % 10 === 0 ? i : ''}</i>`;
-    return `<div class="matrix-wrap"><div class="matrix" style="--cols:${total}">
-      ${line(null, ' is-sum')}
-      <div class="mrow is-ruler"><span class="mlab"></span><span class="mcells">${ruler}</span><b class="mcnt"></b></div>
-      ${(o.only || FIELDS).map(f => line(f)).join('')}
-    </div></div>`;
+    for (let i = 1; i <= TARGET; i++) ruler += `<i class="rt">${i % 10 === 0 ? `<b>${i}</b>` : ''}</i>`;
+    return `<div class="runmap-wrap"><div class="runmap">
+      <div class="rrow2 is-ruler"><span class="rlab"></span><span class="rcells">${ruler}</span><span class="rtail"><i>Fail · 확인</i></span></div>
+      ${gs.map(rowFor).join('')}</div></div>`;
+  }
+  const runLegend = () => '<span class="legend"><i class="rc ok"></i>Pass<i class="rc warn"></i>주의<i class="rc low"></i>OCR 미확인<i class="rc bad"></i>Fail<i class="rc"></i>미수집</span>';
+
+  // 확인이 필요한 회차 번호만 모아 보여준다. 번호를 누르면 그 회차가 열린다.
+  function issueList(rows) {
+    const fails = rows.filter(s => !s.pass), warns = rows.filter(s => s.pass && s.ruleWarnKeys.length);
+    const lows = rows.filter(s => s.pass && !s.ruleWarnKeys.length && s.lowKeys.length);
+    const chips = (list, tone, cap = 72) => list.length
+      ? `<div class="nchips">${list.slice(0, cap).map(s => `<button type="button" class="nchip ${tone}" data-ref="${refOf(s)}" title="${esc(`${gi(s)}번 · ${s.position}·${s.mode} ${pad(s.i)}회 · ${s.t}`)}">${giPad(s)}</button>`).join('')}${list.length > cap ? `<span class="nmore">외 ${list.length - cap}회</span>` : ''}</div>`
+      : '<p class="empty">없습니다.</p>';
+    const sec = (key, title, desc, list, tone) => `<div class="isec">
+      <div class="ihead"><span class="idot ${tone}"></span><b>${title}</b><span class="icnt${list.length ? ' c-' + tone : ''}">${list.length}회</span>
+        <span class="cap">${desc}</span>${list.length ? `<button type="button" class="btn btn-sm" data-filter="${key}">이 회차만 보기</button>` : ''}</div>
+      ${chips(list, tone)}</div>`;
+    return `${sec('fail', '기준을 벗어남 (Fail)', '기준이 있는 13개 항목 중 하나라도 벗어난 회차', fails, 'down')}
+      ${sec('warn', '주의 구간', '에러는 아니지만 기준에 가까워진 회차', warns, 'warn')}
+      ${sec('low', 'OCR 미확인', '카메라가 값을 확실히 읽지 못한 회차 — 눈으로 확인이 필요합니다', lows, 'warn')}`;
   }
   // 종이에 적힌 원칙을 그대로 옮겨 놓은 표. 기준이 없는 항목은 '기록만'으로 남겨 둡니다.
   function ruleTable() {
@@ -509,8 +515,6 @@
       <span class="rv">${f.rule ? esc(ruleText(f)) : '기록만'}</span>
       ${f.rule && f.rule.note ? `<span class="rnote">${esc(f.rule.note)}</span>` : ''}</div>`).join('')}</div>`;
   }
-  const matrixLegend = () => '<span class="legend"><i class="mc ok"></i>정상<i class="mc rec"></i>기록만<i class="mc warn"></i>주의 · 신뢰도 낮음<i class="mc bad"></i>기준 벗어남<i class="mc"></i>미수집</span>';
-  const mapLegend = () => '<span class="legend"><i class="cell ok"></i>Pass<i class="cell warn ok"></i>신뢰도 낮음<i class="cell bad"></i>Fail<i class="cell"></i>남은 회차</span>';
   // 어느 항목 때문에 Fail 났는지. 100회가 넘어가면 "몇 번째 행"보다 이쪽이 먼저 필요하다.
   function failBreakdown(rows, active) {
     const n = {}; rows.forEach(s => s.failKeys.forEach(k => { n[k] = (n[k] || 0) + 1; }));
@@ -521,10 +525,15 @@
       return `<button type="button" class="brk-row${on ? ' is-on' : ''}" data-filter="k:${k}" title="${f.n}. ${esc(f.label)} — 기준 ${esc(ruleText(f))} · ${c}회만 보기"><b class="brk-n2">${f.n}</b><span class="brk-k">${esc(f.label)}<small>${esc(ruleText(f))}</small></span><span class="brk-bar"><i style="width:${(c / max * 100).toFixed(1)}%"></i></span><span class="brk-n">${c}<small>회</small></span></button>`; }).join('')}</div>`;
   }
   function filterBar(rows, active) {
-    const fail = failCount(rows), warn = rows.filter(s => s.pass && isWarn(s)).length;
-    const chip = (v, label, n, cls) => `<button type="button" class="chip${active === v ? ' is-on' : ''}${cls ? ' ' + cls : ''}" data-filter="${v}"${!n && v !== 'all' ? ' disabled' : ''}>${label}<b>${n}</b></button>`;
-    const field = active && active.startsWith('k:') ? FIELDS.find(f => f.key === active.slice(2)) : null;
-    return `<div class="chips">${chip('all', '전체', rows.length)}${chip('fail', 'Fail', fail, 'c-fail')}${chip('warn', '신뢰도 80%↓', warn, 'c-warn')}${field ? `<button type="button" class="chip is-on c-fail" data-filter="all">${esc(field.label)} 불일치<b>${filterRows(rows, active).length}</b><span class="x">✕</span></button>` : ''}${state.q ? `<button type="button" class="chip is-on c-find" data-clear-q="1">"${esc(state.q)}"<b>${rows.length}</b><span class="x">✕</span></button>` : ''}</div>`;
+    const n = {
+      issue: filterRows(rows, 'issue').length, fail: filterRows(rows, 'fail').length,
+      warn: filterRows(rows, 'warn').length, low: filterRows(rows, 'low').length,
+    };
+    const chip = (v, label, c, cls) => `<button type="button" class="chip${active === v ? ' is-on' : ''}${cls ? ' ' + cls : ''}" data-filter="${v}"${!c && v !== 'all' ? ' disabled' : ''}>${label}<b>${c}</b></button>`;
+    const field = active && active.startsWith('k:') ? BY_KEY[active.slice(2)] : null;
+    return `<div class="chips">${chip('issue', '확인 필요', n.issue, 'c-issue')}${chip('fail', 'Fail', n.fail, 'c-fail')}${chip('low', 'OCR 미확인', n.low, 'c-warn')}${chip('all', '전체', rows.length)}
+      ${field ? `<button type="button" class="chip is-on c-fail" data-filter="issue">${field.n}. ${esc(field.label)}<b>${filterRows(rows, active).length}</b><span class="x">✕</span></button>` : ''}
+      ${state.q ? `<button type="button" class="chip is-on c-find" data-clear-q="1">"${esc(state.q)}"<b>${rows.length}</b><span class="x">✕</span></button>` : ''}</div>`;
   }
   const failNav = rows => failCount(rows) ? `<div class="jump"><span>Fail 이동</span><button type="button" class="ibtn" data-jump="prev" aria-label="이전 Fail로">${icon('up')}</button><button type="button" class="ibtn" data-jump="next" aria-label="다음 Fail로">${icon('down')}</button></div>` : '';
 
@@ -532,7 +541,7 @@
   // 26개를 옆으로 늘어놓는 대신 어긋난 항목만 칩으로 요약하고, 나머지는 행을 눌러 상세에서 본다.
   const lowest = s => Math.min(...FIELDS.map(f => s.fields[f.key].conf));
   function table(rows, o = {}) {
-    const head = `<tr><th class="c-idx">${o.showGroup ? '위치·모드 · 회차' : '회차'}</th><th>시각</th><th class="judge">판정</th><th>기준을 벗어난 항목</th><th class="c-conf">최저 신뢰도</th></tr>`;
+    const head = `<tr><th class="c-idx">회차</th><th>시각</th><th class="judge">판정</th><th>기준을 벗어난 항목</th><th class="c-conf">최저 신뢰도</th></tr>`;
     const chip = (f, s, tone) => `<span class="fchip ${tone}"><b>${f.n}</b>${esc(f.label)}<i>${esc(s.fields[f.key].v)}${esc(f.unit || '')}</i></span>`;
     const body = rows.map((s, i) => {
       const cls = [s.pass ? '' : 'is-fail', 'is-clickable', o.newest && i === 0 ? 'is-new' : ''].filter(Boolean).join(' ');
@@ -541,7 +550,7 @@
       const lowChips = s.lowKeys.filter(k => !s.failKeys.includes(k) && !s.ruleWarnKeys.includes(k))
         .map(k => `<span class="fchip l"><b>${BY_KEY[k].n}</b>${esc(BY_KEY[k].label)}<i>신뢰도 ${s.fields[k].conf}%</i></span>`);
       return `<tr class="${cls}" data-ref="${refOf(s)}" tabindex="0">
-        <td class="idx">${o.showGroup ? `<b>${s.position}·${esc(s.mode)}</b>` : ''}${pad(s.i)}</td>
+        <td class="idx"><b>${giPad(s)}</b><small>${s.position}·${esc(s.mode)} ${pad(s.i)}</small></td>
         <td class="t">${s.t}</td>
         <td class="judge"><span class="pill ${s.pass ? 'pill-pass' : 'pill-fail'}">${s.pass ? 'Pass' : 'Fail'}</span></td>
         <td class="chips-cell">${chips.length || lowChips.length ? [...chips, ...lowChips].join('') : '<span class="ok-dash">—</span>'}</td>
@@ -579,7 +588,7 @@
   const findSample = ref => { const [p, m, i] = ref.split('-'); return state.positions[p - 1][m][i - 1]; };
 
   // 4. 결과
-  const groups = () => state.positions.flatMap(p => MODES.map(m => ({ id: `${p.id}-${m}`, label: `${p.id} - ${m}`, rows: p[m] })));
+  const groups = () => state.positions.flatMap(p => MODES.map(m => ({ id: `${p.id}-${m}`, label: `위치 ${p.id} · ${m}`, pos: p.id, mode: m, rows: p[m] })));
   function renderResults() {
     const all = groups(), flat = all.flatMap(g => g.rows), fails = failCount(flat);
     const isAll = state.resultsTab === 'ALL';
@@ -598,19 +607,19 @@
         </div><div class="head-right">${filterBar(base, state.filter)}${failNav(shown)}</div></div>
       <section class="board">
         <div class="card pad map-panel">
-          <div class="box-head"><h3>${icon('grid')}${isAll ? '회차 맵' : '회차 × 항목'}<small>${esc(cur.label)}</small></h3>${isAll ? mapLegend() : matrixLegend()}</div>
-          ${isAll ? `<div class="map-all">${all.map(g => `<button type="button" class="map-line" data-tab="${g.id}"><span class="map-name">${g.label}</span>${shotMap(g.rows, { compact: true, per: 100, hi: hiSet })}<b class="map-n${failCount(g.rows) ? ' f' : ''}">${failCount(g.rows)}</b></button>`).join('')}</div>`
-            : matrix(cur.rows, { hi: hiSet })}
+          <div class="box-head"><h3>${icon('grid')}1 – ${TARGET * 6} 회차 맵<small>${isAll ? '전체' : esc(cur.label)}</small></h3>${runLegend()}</div>
+          ${runMap(isAll ? all : all.filter(g => g.id === cur.id), { hi: hiSet })}
         </div>
       </section>
-      <section class="board board-2"><div class="card pad"><div class="box-head"><h3>${icon('spark')}항목별 Fail</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, state.filter)}</div>${recentFails(flat, 6)}</section>
+      <section class="board board-1"><div class="card pad"><div class="box-head"><h3>${icon('alert')}확인이 필요한 회차</h3><span class="cap">번호를 누르면 그 회차의 당시 화면이 열립니다</span></div>${issueList(cur.rows)}</div></section>
+      <section class="board board-2"><div class="card pad"><div class="box-head"><h3>${icon('spark')}어느 항목 때문인지</h3><span class="cap">누르면 그 항목만</span></div>${failBreakdown(base, 'all')}</div>${recentFails(flat, 6)}</section>
       <section class="card log">
         <div class="log-head"><h2>${esc(cur.label)}<span class="sub">${shown.length}행 표시${shown.length !== cur.rows.length ? ` · 전체 ${cur.rows.length}행` : ''}</span></h2>
           <span class="upload-state${state.uploaded ? ' ok' : ''}">${state.uploaded ? `${icon('check')}업로드 완료 · ${state.uploaded}` : `${icon('info')}아직 업로드하지 않았습니다`}</span></div>
         <div class="tbl-wrap tall">${shown.length ? table(shown, { showGroup: isAll, mode: isAll ? null : cur.id.split('-')[1] }) : `<div class="tbl-empty">${icon('table')}<p>${cur.rows.length ? '이 조건에 해당하는 회차가 없습니다.' : '이 위치·모드는 수집 기록이 없습니다.'}</p></div>`}</div>
       </section>
       <section class="board board-2">${groupPanel()}<div class="card pad"><div class="box-head"><h3>${icon('list')}판정 기준</h3><span class="cap">서비스모드 ${FIELDS.length}개 중 ${RULED.length}개</span></div>${ruleTable()}</div></section>`;
-    app.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { state.resultsTab = b.dataset.tab; state.filter = 'all'; state.jumpTo = null; render(); }));
+    app.querySelectorAll('[data-tab]').forEach(b => b.addEventListener('click', () => { state.resultsTab = b.dataset.tab; state.filter = 'issue'; state.jumpTo = null; render(); }));
     bind('positions', goPositions);
     bind('excel', () => exportCsv(flat, `${state.serial}_results`));
     wireList(shown);
@@ -632,13 +641,13 @@
         <td class="exp">${esc(ruleText(x))}</td><td class="exp${low ? ' low' : ''}">${d.conf}%</td></tr>`;
     };
     const head = bad.length
-      ? `<h2 id="fail-title"><span class="pill pill-fail">Fail</span>위치 ${s.position} · ${esc(s.mode)} · ${pad(s.i)}회</h2>
+      ? `<h2 id="fail-title"><span class="pill pill-fail">Fail</span><span class="gno">${giPad(s)}번</span>위치 ${s.position} · ${esc(s.mode)} · ${pad(s.i)}회</h2>
          <ul class="why">${bad.map(f => `<li><b>${f.n}. ${esc(f.label)}</b><span>${esc(reason(f, s.fields))}</span></li>`).join('')}${warn.map(f => `<li class="w"><b>${f.n}. ${esc(f.label)}</b><span>${esc(reason(f, s.fields))}</span></li>`).join('')}</ul>`
-      : `<h2 id="fail-title"><span class="pill pill-pass">Pass</span>위치 ${s.position} · ${esc(s.mode)} · ${pad(s.i)}회</h2>
+      : `<h2 id="fail-title"><span class="pill pill-pass">Pass</span><span class="gno">${giPad(s)}번</span>위치 ${s.position} · ${esc(s.mode)} · ${pad(s.i)}회</h2>
          <p class="sub">기준이 있는 ${RULED.length}개 항목이 모두 규칙 안에 있습니다.</p>`;
     document.getElementById('fail-body').innerHTML = `<div class="fail-view">
       <div class="fail-frame">${viewport(s, { frozen: true, showRoi: true, position: s.position, mode: s.mode })}
-        <div class="meta"><span>FRAME #${pad(s.i)} · ${s.t}</span><span>POS ${s.position} · ${esc(s.mode)} · S/N ${esc(state.serial)}</span></div></div>
+        <div class="meta"><span>${giPad(s)}번 · FRAME #${pad(s.i)} · ${s.t}</span><span>POS ${s.position} · ${esc(s.mode)} · S/N ${esc(state.serial)}</span></div></div>
       <div class="fail-side">${head}
         <div class="cmp-wrap"><table class="cmp"><thead><tr><th class="cn">#</th><th>항목</th><th>읽은 값</th><th>기준</th><th>신뢰도</th></tr></thead>
           <tbody>${FIELDS.map(row).join('')}</tbody></table></div>
@@ -691,7 +700,7 @@
   const qInput = document.getElementById('q');
   qInput.addEventListener('input', () => { state.q = qInput.value; state.jumpTo = null; render(); qInput.focus(); });
   document.getElementById('search-form').addEventListener('submit', e => e.preventDefault());
-  document.getElementById('btn-reset').addEventListener('click', () => { stopTimer(); Object.assign(state, { serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), resultsTab: null, uploaded: null, last: null, screen: 'serial', filter: 'all', jumpTo: null, q: '' }); render(); });
+  document.getElementById('btn-reset').addEventListener('click', () => { stopTimer(); Object.assign(state, { serial: '', selected: null, position: 1, mode: 'MP', status: 'idle', positions: freshPositions(), resultsTab: null, uploaded: null, last: null, screen: 'serial', filter: 'issue', jumpTo: null, q: '' }); render(); });
   const q = new URLSearchParams(location.search);
   if (q.get('preview') === '1') document.body.classList.add('preview');
   if (q.get('screen') && SCREENS.some(s => s[0] === q.get('screen'))) loadFixture(q.get('screen')); else render();
